@@ -10,15 +10,11 @@ class UCapsuleComponent;
 class UArrowComponent;
 class AShooterNPC;
 
-/**
- *  A basic Actor in charge of spawning Shooter NPCs and monitoring their deaths.
- *  NPCs will be spawned one by one, and the spawner will wait until it dies before spawning a new one.
- */
 UCLASS()
 class NEWPROJECT_API AShooterNPCSpawner : public AActor
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCapsuleComponent* SpawnCapsule;
 
@@ -43,13 +39,20 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="NPC Spawner", meta = (ClampMin = 0, ClampMax = 10))
 	float RespawnDelay = 5.0f;
 
+	/** If false, the spawner only acts as a spawn point for the GameMode */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="NPC Spawner")
+	bool bAutoSpawn = false;
+
 	/** Timer to spawn NPCs after a delay */
 	FTimerHandle SpawnTimer;
 
-public:	
-	
+public:
+
 	/** Constructor */
 	AShooterNPCSpawner();
+
+	/** Returns the world-space spawn transform */
+	FTransform GetSpawnTransform() const;
 
 public:
 

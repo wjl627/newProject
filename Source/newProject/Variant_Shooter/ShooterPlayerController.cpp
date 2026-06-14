@@ -10,6 +10,10 @@
 #include "ShooterCharacter.h"
 #include "ShooterBulletCounterUI.h"
 #include "ShooterUI.h"
+#include "BuffMessageUI.h"
+#include "MatchResultOverlay.h"
+#include "ShooterGameMode.h"
+#include "Engine/Engine.h"
 #include "newProject.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
@@ -64,6 +68,12 @@ void AShooterPlayerController::BeginPlay()
 			ScoreboardUI->AddToViewport(1);
 		}
 
+		BuffMessageWidget = CreateWidget<UBuffMessageUI>(this, UBuffMessageUI::StaticClass());
+		if (BuffMessageWidget)
+		{
+			BuffMessageWidget->AddToPlayerScreen(10);
+		}
+
 	}
 }
 
@@ -111,6 +121,13 @@ void AShooterPlayerController::OnPossess(APawn* InPawn)
 		if (IsLocalPlayerController())
 		{
 			SetupShooterCharacterUI(ShooterCharacter);
+		}
+
+		// Re-send the current score to the client after respawn
+		if (AShooterGameMode* GM = Cast<AShooterGameMode>(GetWorld()->GetAuthGameMode()))
+		{
+			const int32 Score = GM->GetPlayerScore(this);
+			Client_UpdatePlayerScore(Score);
 		}
 	}
 }
@@ -215,5 +232,88 @@ void AShooterPlayerController::Client_UpdateTeamScore_Implementation(uint8 TeamB
 	if (ScoreboardUI)
 	{
 		ScoreboardUI->BP_UpdateScore(TeamByte, Score);
+	}
+}
+
+void AShooterPlayerController::Client_ShowBuffMessage_Implementation(const FString& Message, FColor Color)
+{
+	if (BuffMessageWidget)
+	{
+		BuffMessageWidget->Show(Message, Color);
+	}
+}
+
+void AShooterPlayerController::Client_UpdateMatchTime_Implementation(int32 RemainingSeconds)
+{
+	const int32 Minutes = RemainingSeconds / 60;
+	const int32 Seconds = RemainingSeconds % 60;
+	const FString TimeStr = FString::Printf(TEXT("Time: %02d:%02d"), Minutes, Seconds);
+
+	GEngine->AddOnScreenDebugMessage(1, 1.5f, FColor::White, TimeStr);
+
+	if (ScoreboardUI)
+	{
+		ScoreboardUI->BP_UpdateMatchTime(RemainingSeconds);
+	}
+}
+
+void AShooterPlayerController::Client_AnnounceMatchResult_Implementation(bool bIsWinner, const FString& WinnerName, int32 WinnerScore, int32 MyScore)
+{
+	const FString ResultLine = bIsWinner
+		? FString::Printf(TEXT("YOU WIN!  Score: %d"), MyScore)
+		: FString::Printf(TEXT("GAME OVER  Winner: %s (%d pts)  Your Score: %d"), *WinnerName, WinnerScore, MyScore);
+
+	UE_LOG(LognewProject, Warning, TEXT("Match Result: %s"), *ResultLine);
+
+	// Hide the bullet counter UI
+	if (BulletCounterUI)
+	{
+		BulletCounterUI->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	// Create a fresh result overlay widget (no blueprint dependency)
+	if (UMatchResultOverlay* ResultOverlay = CreateWidget<UMatchResultOverlay>(this, UMatchResultOverlay::StaticClass()))
+	{
+		ResultOverlay->SetResult(ResultLine, bIsWinner ? FColor::Yellow : FColor::Red);
+		ResultOverlay->AddToViewport(100);
+	}
+
+	if (ScoreboardUI)
+	{
+		ScoreboardUI->BP_AnnounceMatchResult(bIsWinner, WinnerName, WinnerScore, MyScore);
+	}
+
+	// Block all game input on this client
+	SetInputMode(FInputModeUIOnly());
+	SetIgnoreMoveInput(true);
+	SetIgnoreLookInput(true);
+	bShowMouseCursor = true;
+	if (APawn* MyPawn = GetPawn())
+	{
+		MyPawn->DisableInput(this);
+	}
+}
+
+void AShooterPlayerController::Client_ShowMatchRanking_Implementation(const FString& RankingText)
+{
+	if (BulletCounterUI)
+	{
+		BulletCounterUI->ShowMatchRanking(RankingText);
+	}
+
+	// Debug display (bypasses UMG, visible even if UMG fails)
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(999, 15.0f, FColor::Yellow, RankingText);
+	}
+
+	// Block input on this client
+	SetInputMode(FInputModeUIOnly());
+	SetIgnoreMoveInput(true);
+	SetIgnoreLookInput(true);
+	bShowMouseCursor = true;
+	if (APawn* MyPawn = GetPawn())
+	{
+		MyPawn->DisableInput(this);
 	}
 }
