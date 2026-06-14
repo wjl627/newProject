@@ -19,7 +19,8 @@ public class newProject : ModuleRules
 			"GameplayStateTreeModule",
 			"NavigationSystem",
 			"UMG",
-			"Slate"
+			"Slate",
+				"SlateCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

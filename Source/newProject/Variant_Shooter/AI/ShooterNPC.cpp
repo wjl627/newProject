@@ -29,6 +29,12 @@ void AShooterNPC::BeginPlay()
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	Weapon = GetWorld()->SpawnActor<AShooterWeapon>(WeaponClass, GetActorTransform(), SpawnParams);
+
+	// NPCs get unlimited reserve ammo
+	if (Weapon)
+	{
+		Weapon->AddReserveMagazines(Weapon->GetMaxReserveMagazines());
+	}
 }
 
 void AShooterNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -126,7 +132,7 @@ FVector AShooterNPC::GetWeaponTargetLocation()
 	FVector AimDir, AimTarget = FVector::ZeroVector;
 
 	// do we have an aim target?
-	if (CurrentAimTarget)
+	if (IsValid(CurrentAimTarget) && !CurrentAimTarget->ActorHasTag(DeathTag))
 	{
 		// target the actor location
 		AimTarget = CurrentAimTarget->GetActorLocation();
@@ -196,6 +202,11 @@ void AShooterNPC::PlayUnequipMontage(UAnimMontage* Montage)
 	// unused (NPCs don't play unequip animations)
 }
 
+void AShooterNPC::PlayReloadMontage(UAnimMontage* Montage)
+{
+	// unused (NPCs don't play reload animations)
+}
+
 void AShooterNPC::Die()
 {
 	// only the server kills this character
@@ -260,9 +271,8 @@ void AShooterNPC::StartShooting(AActor* ActorToShoot)
 
 void AShooterNPC::StopShooting()
 {
-	// lower the flag
 	bIsShooting = false;
+	CurrentAimTarget = nullptr;
 
-	// signal the weapon
 	Weapon->StopFiring();
 }

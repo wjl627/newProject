@@ -155,6 +155,9 @@ public:
 	/** Plays the unequip animation on the character's mesh */
 	virtual void PlayUnequipMontage(UAnimMontage* Montage) override;
 
+	/** Plays the reload animation on the character's mesh */
+	virtual void PlayReloadMontage(UAnimMontage* Montage) override;
+
 	//~End IShooterWeaponHolder interface
 
 protected:
@@ -172,4 +175,7 @@ public:
 
 	/** Signals this character to stop shooting */
 	void StopShooting();
+
+	/** Returns true if the NPC is dead */
+	bool IsDead() const { return bIsDead; }
 };

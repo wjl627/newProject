@@ -13,6 +13,7 @@
 #include "TimerManager.h"
 #include "ShooterGameMode.h"
 #include "Net/UnrealNetwork.h"
+#include "ShooterPlayerController.h"
 
 AShooterCharacter::AShooterCharacter()
 {
@@ -82,6 +83,9 @@ void AShooterCharacter::EndPlay(EEndPlayReason::Type EndPlayReason)
 	// clear timers
 	GetWorld()->GetTimerManager().ClearTimer(RespawnTimer);
 	GetWorld()->GetTimerManager().ClearTimer(WeaponSwitchTimerHandle);
+	GetWorld()->GetTimerManager().ClearTimer(AimUpdateTimer);
+	GetWorld()->GetTimerManager().ClearTimer(DamageBoostTimer);
+	GetWorld()->GetTimerManager().ClearTimer(ScoreBoostTimer);
 }
 
 void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -98,6 +102,9 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 		// Switch weapon
 		EnhancedInputComponent->BindAction(SwitchWeaponAction, ETriggerEvent::Started, this, &AShooterCharacter::DoSwitchWeapon);
+
+		// Reload
+		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &AShooterCharacter::DoReload);
 	}
 
 }
@@ -115,6 +122,9 @@ float AShooterCharacter::TakeDamage(float Damage, struct FDamageEvent const& Dam
 	{
 		return 0.0f;
 	}
+
+	// remember who damaged us for kill credit
+	LastDamageInstigator = EventInstigator;
 
 	// Reduce HP
 	CurrentHP -= Damage;
@@ -177,13 +187,30 @@ void AShooterCharacter::DoStartFiring()
 		}
 		else
 		{
-			Server_StartFiring();
+			Server_StartFiring(GetWeaponTargetLocation());
+
+			// Stream aim updates to server during full-auto fire
+			if (CurrentWeapon->IsFullAuto())
+			{
+				GetWorld()->GetTimerManager().SetTimer(
+					AimUpdateTimer,
+					this,
+					&AShooterCharacter::StreamAimTarget,
+					FMath::Max(0.05f, CurrentWeapon->GetRefireRate() * 0.5f),
+					true
+				);
+			}
 		}
 	}
 }
 
 void AShooterCharacter::DoStopFiring()
 {
+	if (!HasAuthority())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(AimUpdateTimer);
+	}
+
 	if (CurrentWeapon && !IsDead())
 	{
 		if (HasAuthority())
@@ -197,11 +224,11 @@ void AShooterCharacter::DoStopFiring()
 	}
 }
 
-void AShooterCharacter::Server_StartFiring_Implementation()
+void AShooterCharacter::Server_StartFiring_Implementation(FVector ClientAimTarget)
 {
 	if (CurrentWeapon)
 	{
-		CurrentWeapon->StartFiring();
+		CurrentWeapon->StartFiring(ClientAimTarget);
 	}
 }
 
@@ -210,6 +237,45 @@ void AShooterCharacter::Server_StopFiring_Implementation()
 	if (CurrentWeapon)
 	{
 		CurrentWeapon->StopFiring();
+	}
+}
+
+void AShooterCharacter::Server_UpdateAimTarget_Implementation(FVector ClientAimTarget)
+{
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->UpdateOverrideAimTarget(ClientAimTarget);
+	}
+}
+
+void AShooterCharacter::StreamAimTarget()
+{
+	if (CurrentWeapon)
+	{
+		Server_UpdateAimTarget(GetWeaponTargetLocation());
+	}
+}
+
+void AShooterCharacter::DoReload()
+{
+	if (CurrentWeapon && !IsDead() && !bIsSwitchingWeapon && !CurrentWeapon->IsReloading())
+	{
+		if (HasAuthority())
+		{
+			CurrentWeapon->Reload();
+		}
+		else
+		{
+			Server_Reload();
+		}
+	}
+}
+
+void AShooterCharacter::Server_Reload_Implementation()
+{
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->Reload();
 	}
 }
 
@@ -352,7 +418,7 @@ void AShooterCharacter::AttachWeaponMeshes(AShooterWeapon* Weapon)
 	// attach the weapon meshes
 	Weapon->GetFirstPersonMesh()->AttachToComponent(GetFirstPersonMesh(), AttachmentRule, FirstPersonWeaponSocket);
 	Weapon->GetThirdPersonMesh()->AttachToComponent(GetMesh(), AttachmentRule, FirstPersonWeaponSocket);
-	
+
 }
 
 void AShooterCharacter::PlayFiringMontage(UAnimMontage* Montage)
@@ -372,6 +438,14 @@ void AShooterCharacter::PlayEquipMontage(UAnimMontage* Montage)
 }
 
 void AShooterCharacter::PlayUnequipMontage(UAnimMontage* Montage)
+{
+	if (Montage && GetFirstPersonMesh())
+	{
+		GetFirstPersonMesh()->GetAnimInstance()->Montage_Play(Montage);
+	}
+}
+
+void AShooterCharacter::PlayReloadMontage(UAnimMontage* Montage)
 {
 	if (Montage && GetFirstPersonMesh())
 	{
@@ -485,21 +559,31 @@ void AShooterCharacter::Die()
 		return;
 	}
 
-	// deactivate the weapon
+	// deactivate the weapon and clear buffs
 	if (IsValid(CurrentWeapon))
 	{
 		CurrentWeapon->DeactivateWeapon();
+		CurrentWeapon->SetDamageMultiplier(1.0f);
 	}
 
-	// halve the player's score on death
+	// clear active buff timers
+	GetWorld()->GetTimerManager().ClearTimer(DamageBoostTimer);
+	GetWorld()->GetTimerManager().ClearTimer(ScoreBoostTimer);
+	bHasDamageBoost = false;
+	bHasScoreBoost = false;
+
 	if (AShooterGameMode* GM = Cast<AShooterGameMode>(GetWorld()->GetAuthGameMode()))
 	{
-		GM->OnPlayerDeath();
+		// grant kill score + rewards to the killer (AddKillScore handles both)
+		GM->AddKillScore(LastDamageInstigator);
+
+		// halve the dead player's score
+		GM->OnPlayerDeath(GetController());
 	}
 
 	// grant the death tag to the character
 	Tags.Add(DeathTag);
-		
+
 	// stop character movement
 	GetCharacterMovement()->StopMovementImmediately();
 
@@ -531,4 +615,91 @@ bool AShooterCharacter::IsDead() const
 {
 	// the character is dead if their current HP drops to zero
 	return CurrentHP <= 0.0f;
+}
+
+// ---- Buff System ----
+
+void AShooterCharacter::GrantKillRewards()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// Add one reserve magazine to every owned weapon
+	for (AShooterWeapon* Weapon : OwnedWeapons)
+	{
+		if (Weapon)
+		{
+			Weapon->AddReserveMagazines(1);
+		}
+	}
+
+	ShowBuffMessage(TEXT("Kill Reward: +1 Magazine"), FColor::Green);
+
+	// Roll for health restore
+	if (FMath::FRand() < HealthRestoreChance)
+	{
+		const float PrevHP = CurrentHP;
+		CurrentHP = FMath::Min(CurrentHP + HealthRestoreAmount, MaxHP);
+		if (CurrentHP > PrevHP)
+		{
+			OnDamaged.Broadcast(CurrentHP / MaxHP);
+			ShowBuffMessage(FString::Printf(TEXT("Kill Reward: +%.0f HP"), CurrentHP - PrevHP), FColor::Green);
+		}
+	}
+
+	// Roll for damage boost
+	if (!bHasDamageBoost && FMath::FRand() < DamageBoostChance)
+	{
+		ActivateDamageBoost();
+	}
+
+	// Roll for score boost
+	if (!bHasScoreBoost && FMath::FRand() < ScoreBoostChance)
+	{
+		ActivateScoreBoost();
+	}
+}
+
+void AShooterCharacter::ActivateDamageBoost()
+{
+	bHasDamageBoost = true;
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->SetDamageMultiplier(DamageBoostMultiplier);
+	}
+	ShowBuffMessage(FString::Printf(TEXT("Damage Boost x%.0f! (%.0fs)"), DamageBoostMultiplier, DamageBoostDuration), FColor::Orange);
+	GetWorld()->GetTimerManager().SetTimer(DamageBoostTimer, this, &AShooterCharacter::DeactivateDamageBoost, DamageBoostDuration, false);
+}
+
+void AShooterCharacter::DeactivateDamageBoost()
+{
+	bHasDamageBoost = false;
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->SetDamageMultiplier(1.0f);
+	}
+	ShowBuffMessage(TEXT("Damage Boost Ended"), FColor::Red);
+}
+
+void AShooterCharacter::ActivateScoreBoost()
+{
+	bHasScoreBoost = true;
+	ShowBuffMessage(FString::Printf(TEXT("Score Boost x%.0f! (%.0fs)"), ScoreBoostMultiplier, ScoreBoostDuration), FColor::Cyan);
+	GetWorld()->GetTimerManager().SetTimer(ScoreBoostTimer, this, &AShooterCharacter::DeactivateScoreBoost, ScoreBoostDuration, false);
+}
+
+void AShooterCharacter::DeactivateScoreBoost()
+{
+	bHasScoreBoost = false;
+	ShowBuffMessage(TEXT("Score Boost Ended"), FColor::Red);
+}
+
+void AShooterCharacter::ShowBuffMessage(const FString& Message, FColor Color)
+{
+	if (AShooterPlayerController* PC = Cast<AShooterPlayerController>(GetController()))
+	{
+		PC->Client_ShowBuffMessage(Message, Color);
+	}
 }

@@ -58,4 +58,7 @@ public:
 
 	/** Plays the unequip montage on the character's mesh */
 	virtual void PlayUnequipMontage(UAnimMontage* Montage) = 0;
+
+	/** Plays the reload montage on the character's mesh */
+	virtual void PlayReloadMontage(UAnimMontage* Montage) = 0;
 };

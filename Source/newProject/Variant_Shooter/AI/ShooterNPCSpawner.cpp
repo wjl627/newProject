@@ -33,8 +33,8 @@ void AShooterNPCSpawner::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	// ensure we don't spawn NPCs if our initial spawn count is zero
-	if (SpawnCount > 0)
+	// only auto-spawn if enabled and spawn count is set
+	if (bAutoSpawn && SpawnCount > 0)
 	{
 		// schedule the first NPC spawn
 		GetWorld()->GetTimerManager().SetTimer(SpawnTimer, this, &AShooterNPCSpawner::SpawnNPC, InitialSpawnDelay);
@@ -67,6 +67,11 @@ void AShooterNPCSpawner::SpawnNPC()
 			SpawnedNPC->OnPawnDeath.AddDynamic(this, &AShooterNPCSpawner::OnNPCDied);
 		}
 	}
+}
+
+FTransform AShooterNPCSpawner::GetSpawnTransform() const
+{
+	return SpawnCapsule->GetComponentTransform();
 }
 
 void AShooterNPCSpawner::OnNPCDied()

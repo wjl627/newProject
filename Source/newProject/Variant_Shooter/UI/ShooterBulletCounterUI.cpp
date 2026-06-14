@@ -86,7 +86,9 @@ void UShooterBulletCounterUI::NativeConstruct()
 			{
 				AmmoText->SetText(FText::FromString(TEXT("10 / 10")));
 				AmmoText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-				AmmoText->Font.Size = 24;
+				FSlateFontInfo AmmoFont;
+				AmmoFont.Size = 24;
+				AmmoText->SetFont(AmmoFont);
 				AmmoText->SetJustification(ETextJustify::Right);
 
 				UCanvasPanelSlot* PanelSlot = RootCanvas->AddChildToCanvas(AmmoText);
@@ -95,6 +97,36 @@ void UShooterBulletCounterUI::NativeConstruct()
 					PanelSlot->SetAnchors(FAnchors(0.8f, 0.9f, 0.98f, 0.97f));
 					PanelSlot->SetAlignment(FVector2D(1.0f, 0.0f));
 				}
+			}
+		}
+		// Match result overlay (hidden until end of match)
+		ResultBackground = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ResultBg"));
+		if (ResultBackground)
+		{
+			ResultBackground->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.7f));
+			ResultBackground->SetVisibility(ESlateVisibility::Collapsed);
+			UCanvasPanelSlot* BgSlot = RootCanvas->AddChildToCanvas(ResultBackground);
+			if (BgSlot)
+			{
+				BgSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+				BgSlot->SetOffsets(FMargin(0.0f));
+				BgSlot->SetAlignment(FVector2D::ZeroVector);
+			}
+		}
+		ResultText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ResultText"));
+		if (ResultText)
+		{
+			ResultText->SetJustification(ETextJustify::Center);
+			ResultText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+			FSlateFontInfo MatchFont;
+			MatchFont.Size = 60;
+			ResultText->SetFont(MatchFont);
+			UCanvasPanelSlot* TextSlot = RootCanvas->AddChildToCanvas(ResultText);
+			if (TextSlot)
+			{
+				TextSlot->SetAnchors(FAnchors(0.0f, 0.35f, 1.0f, 0.6f));
+				TextSlot->SetOffsets(FMargin(20.0f));
+				TextSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 			}
 		}
 	}
@@ -204,4 +236,45 @@ void UShooterBulletCounterUI::SetHealthPercent(float LifePercent)
 	}
 
 	BP_Damaged(LifePercent);
+}
+
+void UShooterBulletCounterUI::ShowMatchResult(const FString& Message, FColor Color)
+{
+	UE_LOG(LogTemp, Warning, TEXT("ShowMatchResult: Msg=[%s]"), *Message);
+
+	// Repurpose the AmmoText (which we KNOW renders) for match result display
+	if (AmmoText)
+	{
+		FSlateFontInfo BigFont;
+		BigFont.Size = 48;
+		AmmoText->SetFont(BigFont);
+		AmmoText->SetJustification(ETextJustify::Center);
+		AmmoText->SetText(FText::FromString(Message));
+		AmmoText->SetColorAndOpacity(FSlateColor(Color));
+
+		if (UCanvasPanelSlot* TextSlot = Cast<UCanvasPanelSlot>(AmmoText->Slot))
+		{
+			TextSlot->SetAnchors(FAnchors(0.05f, 0.35f, 0.95f, 0.65f));
+			TextSlot->SetOffsets(FMargin(0.0f));
+			TextSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		}
+	}
+
+	if (HealthBar)
+	{
+		HealthBar->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UShooterBulletCounterUI::ShowMatchRanking(const FString& RankingText)
+{
+	if (AmmoText)
+	{
+		AmmoText->SetText(FText::FromString(RankingText));
+		AmmoText->SetColorAndOpacity(FSlateColor(FLinearColor::Yellow));
+	}
+	if (HealthBar)
+	{
+		HealthBar->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }

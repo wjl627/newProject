@@ -15,17 +15,11 @@ class UPawnNoiseEmitterComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBulletCountUpdatedDelegate, int32, MagazineSize, int32, Bullets);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FDamagedDelegate, float, LifePercent);
 
-/**
- *  A player controllable first person shooter character
- *  Manages a weapon inventory through the IShooterWeaponHolder interface
- *  Manages health and death
- */
 UCLASS(abstract)
 class NEWPROJECT_API AShooterCharacter : public AnewProjectCharacter, public IShooterWeaponHolder
 {
 	GENERATED_BODY()
-	
-	/** AI Noise emitter component */
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UPawnNoiseEmitterComponent* PawnNoiseEmitter;
 
@@ -34,6 +28,10 @@ protected:
 	/** Fire weapon input action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* FireAction;
+
+	/** Reload weapon input action */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* ReloadAction;
 
 	/** Switch weapon input action */
 	UPROPERTY(EditAnywhere, Category ="Input")
@@ -95,6 +93,63 @@ protected:
 	float RespawnTime = 5.0f;
 
 	FTimerHandle RespawnTimer;
+
+	/** Timer for continuously sending aim updates to server during full-auto fire */
+	FTimerHandle AimUpdateTimer;
+
+	// ---- Buff System ----
+
+	/** Chance to restore health on kill */
+	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 1))
+	float HealthRestoreChance = 0.3f;
+
+	/** Amount of health restored */
+	UPROPERTY(EditAnywhere, Category="Buffs")
+	float HealthRestoreAmount = 50.0f;
+
+	/** Chance to get damage boost on kill */
+	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 1))
+	float DamageBoostChance = 0.3f;
+
+	/** Damage multiplier while boosted */
+	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 1, ClampMax = 10))
+	float DamageBoostMultiplier = 2.0f;
+
+	/** Duration of damage boost */
+	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 60))
+	float DamageBoostDuration = 10.0f;
+
+	/** Chance to get score boost on kill */
+	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 1))
+	float ScoreBoostChance = 0.2f;
+
+	/** Score multiplier while boosted */
+	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 1, ClampMax = 10))
+	float ScoreBoostMultiplier = 2.0f;
+
+	/** Duration of score boost */
+	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 60))
+	float ScoreBoostDuration = 15.0f;
+
+	/** Controller that last damaged this character */
+	AController* LastDamageInstigator = nullptr;
+
+	/** Whether damage boost is active */
+	bool bHasDamageBoost = false;
+
+	/** Whether score boost is active */
+	bool bHasScoreBoost = false;
+
+	FTimerHandle DamageBoostTimer;
+	FTimerHandle ScoreBoostTimer;
+
+	void ActivateDamageBoost();
+	void DeactivateDamageBoost();
+	void ActivateScoreBoost();
+	void DeactivateScoreBoost();
+
+	/** Sends a buff notification to the owning client only */
+	void ShowBuffMessage(const FString& Message, FColor Color);
 
 public:
 
@@ -158,13 +213,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoStopFiring();
 
+	/** Called by timer to stream aim target updates to server */
+	void StreamAimTarget();
+
 	/** Server RPC for start firing */
 	UFUNCTION(Server, Reliable)
-	void Server_StartFiring();
+	void Server_StartFiring(FVector ClientAimTarget);
 
 	/** Server RPC for stop firing */
 	UFUNCTION(Server, Reliable)
 	void Server_StopFiring();
+
+	/** Server RPC for updating aim target during full-auto fire */
+	UFUNCTION(Server, Unreliable)
+	void Server_UpdateAimTarget(FVector ClientAimTarget);
 
 	/** Handles switch weapon input */
 	UFUNCTION(BlueprintCallable, Category="Input")
@@ -173,6 +235,14 @@ public:
 	/** Server RPC for weapon switch */
 	UFUNCTION(Server, Reliable)
 	void Server_SwitchWeapon();
+
+	/** Handles reload weapon input */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	void DoReload();
+
+	/** Server RPC for reload */
+	UFUNCTION(Server, Reliable)
+	void Server_Reload();
 
 	/** Multicast RPC for equip montage */
 	UFUNCTION(NetMulticast, Reliable)
@@ -186,38 +256,18 @@ public:
 
 	//~Begin IShooterWeaponHolder interface
 
-	/** Attaches a weapon's meshes to the owner */
 	virtual void AttachWeaponMeshes(AShooterWeapon* Weapon) override;
-
-	/** Plays the firing montage for the weapon */
 	virtual void PlayFiringMontage(UAnimMontage* Montage) override;
-
-	/** Applies weapon recoil to the owner */
 	virtual void AddWeaponRecoil(float Recoil) override;
-
-	/** Updates the weapon's HUD with the current ammo count */
 	virtual void UpdateWeaponHUD(int32 CurrentAmmo, int32 MagazineSize) override;
-
-	/** Calculates and returns the aim location for the weapon */
 	virtual FVector GetWeaponTargetLocation() override;
-
-	/** Gives a weapon of this class to the owner */
 	virtual void AddWeaponClass(const TSubclassOf<AShooterWeapon>& WeaponClass) override;
-
-	/** Activates the passed weapon */
 	virtual void OnWeaponActivated(AShooterWeapon* Weapon) override;
-
-	/** Deactivates the passed weapon */
 	virtual void OnWeaponDeactivated(AShooterWeapon* Weapon) override;
-
-	/** Notifies the owner that the weapon cooldown has expired and it's ready to shoot again */
 	virtual void OnSemiWeaponRefire() override;
-
-	/** Plays the equip montage on the character's mesh */
 	virtual void PlayEquipMontage(UAnimMontage* Montage) override;
-
-	/** Plays the unequip montage on the character's mesh */
 	virtual void PlayUnequipMontage(UAnimMontage* Montage) override;
+	virtual void PlayReloadMontage(UAnimMontage* Montage) override;
 
 	//~End IShooterWeaponHolder interface
 
@@ -259,4 +309,10 @@ public:
 
 	/** Returns max HP */
 	float GetMaxHP() const { return MaxHP; }
+
+	/** Grants kill rewards: ammo + random buffs */
+	void GrantKillRewards();
+
+	/** Returns the score multiplier for scoring */
+	float GetScoreMultiplier() const { return bHasScoreBoost ? ScoreBoostMultiplier : 1.0f; }
 };

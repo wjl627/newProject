@@ -10,6 +10,7 @@ class UInputMappingContext;
 class AShooterCharacter;
 class UShooterBulletCounterUI;
 class UShooterUI;
+class UBuffMessageUI;
 
 /**
  *  Simple PlayerController for a first person shooter game
@@ -67,6 +68,10 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UShooterUI> ScoreboardUI;
 
+	/** Widget for showing buff notification messages */
+	UPROPERTY()
+	TObjectPtr<UBuffMessageUI> BuffMessageWidget;
+
 protected:
 
 	/** Gameplay Initialization */
@@ -108,4 +113,20 @@ public:
 	/** Client RPC to update a team's score on this client */
 	UFUNCTION(Client, Reliable)
 	void Client_UpdateTeamScore(uint8 TeamByte, int32 Score);
+
+	/** Client RPC to show a buff notification message */
+	UFUNCTION(Client, Reliable)
+	void Client_ShowBuffMessage(const FString& Message, FColor Color);
+
+	/** Client RPC to update the remaining match time */
+	UFUNCTION(Client, Reliable)
+	void Client_UpdateMatchTime(int32 RemainingSeconds);
+
+	/** Client RPC to announce the match result */
+	UFUNCTION(Client, Reliable)
+	void Client_AnnounceMatchResult(bool bIsWinner, const FString& WinnerName, int32 WinnerScore, int32 MyScore);
+
+	/** Client RPC to show the match ranking (same for all players) */
+	UFUNCTION(Client, Reliable)
+	void Client_ShowMatchRanking(const FString& RankingText);
 };
