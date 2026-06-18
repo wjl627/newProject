@@ -35,4 +35,8 @@ public:
 	/** Allows Blueprint to display the match result */
 	UFUNCTION(BlueprintImplementableEvent, Category="Shooter", meta = (DisplayName = "Announce Match Result"))
 	void BP_AnnounceMatchResult(bool bIsWinner, const FString& WinnerName, int32 WinnerScore, int32 MyScore);
+
+	/** Allows Blueprint to display the match ranking (top players) */
+	UFUNCTION(BlueprintImplementableEvent, Category="Shooter", meta = (DisplayName = "Show Match Ranking"))
+	void BP_ShowMatchRanking(const FString& RankingText);
 };

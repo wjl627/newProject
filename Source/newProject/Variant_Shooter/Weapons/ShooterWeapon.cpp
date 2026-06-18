@@ -4,7 +4,6 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
 #include "ShooterBulletTracer.h"
-#include "ShooterProjectile.h"
 #include "ShooterWeaponHolder.h"
 #include "Components/SceneComponent.h"
 #include "TimerManager.h"
@@ -226,11 +225,9 @@ void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 		}
 	}
 
-	const FVector MuzzleLoc = FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
-
 	--CurrentBullets;
 
-	Multicast_OnFireEffects(CurrentBullets, MuzzleLoc, ImpactPoint);
+	Multicast_OnFireEffects(CurrentBullets, ImpactPoint);
 
 	if (CurrentBullets <= 0)
 	{
@@ -238,7 +235,7 @@ void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 	}
 }
 
-void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, const FVector& MuzzleLocation, const FVector& ImpactPoint)
+void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, const FVector& ImpactPoint)
 {
 	CurrentBullets = BulletCount;
 
@@ -251,12 +248,16 @@ void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, c
 
 	if (TracerClass)
 	{
+		const FVector MuzzleLocation = FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
+
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-		if (AShooterBulletTracer* Tracer = GetWorld()->SpawnActor<AShooterBulletTracer>(TracerClass, MuzzleLocation, FRotator::ZeroRotator, SpawnParams))
+		if (AShooterBulletTracer* Tracer = GetWorld()->SpawnActor<AShooterBulletTracer>(TracerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams))
 		{
-			Tracer->Initialize(MuzzleLocation, ImpactPoint);
+			const FVector Dir = (ImpactPoint - MuzzleLocation).GetSafeNormal();
+			const FVector TracerStart = MuzzleLocation + Dir * MuzzleOffset;
+			Tracer->Initialize(TracerStart, ImpactPoint);
 		}
 	}
 }
@@ -267,15 +268,6 @@ void AShooterWeapon::Multicast_OnReloadEffects_Implementation()
 	{
 		WeaponOwner->PlayReloadMontage(ReloadMontage);
 	}
-}
-
-FTransform AShooterWeapon::CalculateProjectileSpawnTransform(const FVector& TargetLocation) const
-{
-	const FVector MuzzleLoc = FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
-	const FVector SpawnLoc = MuzzleLoc + ((TargetLocation - MuzzleLoc).GetSafeNormal() * MuzzleOffset);
-	const FRotator AimRot = UKismetMathLibrary::FindLookAtRotation(SpawnLoc, TargetLocation + (UKismetMathLibrary::RandomUnitVector() * AimVariance));
-
-	return FTransform(AimRot, SpawnLoc, FVector::OneVector);
 }
 
 const TSubclassOf<UAnimInstance>& AShooterWeapon::GetFirstPersonAnimInstanceClass() const

@@ -11,51 +11,16 @@ void UBuffMessageUI::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	if (!WidgetTree)
+	// Auto-find the first TextBlock from user's blueprint (any name works)
+	if (WidgetTree)
 	{
-		return;
-	}
-
-	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
-	if (!Canvas)
-	{
-		return;
-	}
-	WidgetTree->RootWidget = Canvas;
-
-	// Background border for visibility
-	BackgroundBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Background"));
-	if (BackgroundBorder)
-	{
-		BackgroundBorder->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
-		BackgroundBorder->SetVisibility(ESlateVisibility::Collapsed);
-
-		UCanvasPanelSlot* BorderSlot = Canvas->AddChildToCanvas(BackgroundBorder);
-		if (BorderSlot)
+		WidgetTree->ForEachWidget([this](UWidget* Widget)
 		{
-			BorderSlot->SetAnchors(FAnchors(0.1f, 0.35f, 0.9f, 0.55f));
-			BorderSlot->SetOffsets(FMargin(0.0f));
-			BorderSlot->SetAlignment(FVector2D(0.0f, 0.0f));
-		}
-	}
-
-	MessageText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MessageText"));
-	if (MessageText)
-	{
-		MessageText->SetJustification(ETextJustify::Center);
-		MessageText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-
-		FSlateFontInfo FontInfo;
-		FontInfo.Size = 48;
-		MessageText->SetFont(FontInfo);
-
-		UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(MessageText);
-		if (CanvasSlot)
-		{
-			CanvasSlot->SetAnchors(FAnchors(0.1f, 0.35f, 0.9f, 0.55f));
-			CanvasSlot->SetOffsets(FMargin(20.0f));
-			CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-		}
+			if (!MessageText)
+			{
+				MessageText = Cast<UTextBlock>(Widget);
+			}
+		});
 	}
 
 	SetVisibility(ESlateVisibility::Hidden);
@@ -65,34 +30,32 @@ void UBuffMessageUI::Show(const FString& Message, FColor Color)
 {
 	if (MessageText)
 	{
-		MessageText->SetText(FText::FromString(Message));
+		// Append new message on top, keep previous ones below
+		const FText Existing = MessageText->GetText();
+		const FText NewLine = FText::FromString(Message);
+		if (Existing.IsEmpty())
+		{
+			MessageText->SetText(NewLine);
+		}
+		else
+		{
+			MessageText->SetText(FText::Format(FText::FromString(TEXT("{0}\n{1}")), NewLine, Existing));
+		}
 		MessageText->SetColorAndOpacity(FSlateColor(Color));
-	}
-	if (BackgroundBorder)
-	{
-		BackgroundBorder->SetVisibility(ESlateVisibility::Visible);
 	}
 	SetVisibility(ESlateVisibility::Visible);
 
+	// Reset timer: hide 3s after the LAST buff message
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(HideTimer);
-		World->GetTimerManager().SetTimer(HideTimer, this, &UBuffMessageUI::Hide, 2.0f, false);
+		World->GetTimerManager().SetTimer(HideTimer, this, &UBuffMessageUI::Hide, 3.0f, false);
 	}
 }
 
 void UBuffMessageUI::ShowPersistent(const FString& Message, FColor Color)
 {
-	if (MessageText)
-	{
-		MessageText->SetText(FText::FromString(Message));
-		MessageText->SetColorAndOpacity(FSlateColor(Color));
-	}
-	if (BackgroundBorder)
-	{
-		BackgroundBorder->SetVisibility(ESlateVisibility::Visible);
-	}
-	SetVisibility(ESlateVisibility::Visible);
+	Show(Message, Color);
 
 	if (UWorld* World = GetWorld())
 	{
@@ -102,9 +65,9 @@ void UBuffMessageUI::ShowPersistent(const FString& Message, FColor Color)
 
 void UBuffMessageUI::Hide()
 {
-	if (BackgroundBorder)
+	if (MessageText)
 	{
-		BackgroundBorder->SetVisibility(ESlateVisibility::Collapsed);
+		MessageText->SetText(FText::GetEmpty());
 	}
 	SetVisibility(ESlateVisibility::Hidden);
 }

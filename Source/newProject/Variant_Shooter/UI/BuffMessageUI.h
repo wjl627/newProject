@@ -10,7 +10,7 @@
 #include "Components/Border.h"
 #include "BuffMessageUI.generated.h"
 
-UCLASS()
+UCLASS(BlueprintType, Blueprintable)
 class NEWPROJECT_API UBuffMessageUI : public UUserWidget
 {
 	GENERATED_BODY()

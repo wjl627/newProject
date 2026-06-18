@@ -59,23 +59,11 @@ public:
 	UPROPERTY()
 	TObjectPtr<UTextBlock> AmmoText;
 
-	UPROPERTY()
-	TObjectPtr<UBorder> ResultBackground;
-
-	UPROPERTY()
-	TObjectPtr<UTextBlock> ResultText;
-
 	/** Sets the ammo display */
 	void SetAmmo(int32 MagazineSize, int32 BulletCount);
 
 	/** Sets the health bar fill */
 	void SetHealthPercent(float LifePercent);
-
-	/** Shows match result overlay */
-	void ShowMatchResult(const FString& Message, FColor Color);
-
-	/** Shows the match ranking (top 3) */
-	void ShowMatchRanking(const FString& RankingText);
 
 	/** Allows Blueprint to react to bullet count changes (e.g. animations) */
 	UFUNCTION(BlueprintImplementableEvent, Category="Shooter", meta=(DisplayName = "UpdateBulletCounter"))

@@ -9,7 +9,6 @@
 #include "ShooterWeapon.generated.h"
 
 class IShooterWeaponHolder;
-class AShooterProjectile;
 class USkeletalMeshComponent;
 class UAnimMontage;
 class UAnimInstance;
@@ -37,10 +36,6 @@ protected:
 
 	/** Cast pointer to the weapon owner */
 	IShooterWeaponHolder* WeaponOwner;
-
-	/** Type of projectiles this weapon will shoot (deprecated — use hitscan) */
-	UPROPERTY(EditAnywhere, Category="Ammo")
-	TSubclassOf<AShooterProjectile> ProjectileClass;
 
 	/** Visual tracer actor class spawned on fire */
 	UPROPERTY(EditAnywhere, Category="Ammo")
@@ -221,9 +216,6 @@ protected:
 	/** Fire a projectile towards the target location */
 	virtual void FireProjectile(const FVector& TargetLocation);
 
-	/** Calculates the spawn transform for projectiles shot by this weapon */
-	FTransform CalculateProjectileSpawnTransform(const FVector& TargetLocation) const;
-
 	/** Called when the reload timer expires — refills the magazine */
 	void FinishReload();
 
@@ -287,7 +279,7 @@ public:
 
 	/** Multicast firing effects to all clients */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_OnFireEffects(int32 BulletCount, const FVector& MuzzleLocation, const FVector& ImpactPoint);
+	void Multicast_OnFireEffects(int32 BulletCount, const FVector& ImpactPoint);
 
 	/** Multicast reload effects to all clients */
 	UFUNCTION(NetMulticast, Reliable)

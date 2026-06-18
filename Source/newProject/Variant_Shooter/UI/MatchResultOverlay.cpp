@@ -2,6 +2,10 @@
 
 #include "MatchResultOverlay.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Border.h"
+#include "Widgets/Layout/Anchors.h"
 
 void UMatchResultOverlay::NativeConstruct()
 {
@@ -12,19 +16,45 @@ void UMatchResultOverlay::NativeConstruct()
 		return;
 	}
 
+	// Root canvas for layering
+	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass());
+	if (!Canvas)
+	{
+		return;
+	}
+	WidgetTree->RootWidget = Canvas;
+
+	// Dark background overlay
+	UBorder* Background = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+	if (Background)
+	{
+		Background->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f));
+		UCanvasPanelSlot* BgSlot = Canvas->AddChildToCanvas(Background);
+		if (BgSlot)
+		{
+			BgSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+			BgSlot->SetOffsets(FMargin(0.0f));
+			BgSlot->SetAlignment(FVector2D::ZeroVector);
+		}
+	}
+
+	// Ranking text
 	ResultTextBlock = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ResultLabel"));
 	if (ResultTextBlock)
 	{
-		WidgetTree->RootWidget = ResultTextBlock;
-
 		FSlateFontInfo Font;
-		Font.Size = 48;
+		Font.Size = 30;
 		ResultTextBlock->SetFont(Font);
 		ResultTextBlock->SetJustification(ETextJustify::Center);
-		ResultTextBlock->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		ResultTextBlock->SetColorAndOpacity(FSlateColor(FLinearColor::Yellow));
 
-		// Vertical alignment via padding: push down 35% from top
-		ResultTextBlock->SetMargin(FMargin(20.0f, 200.0f, 20.0f, 0.0f));
+		UCanvasPanelSlot* TextSlot = Canvas->AddChildToCanvas(ResultTextBlock);
+		if (TextSlot)
+		{
+			TextSlot->SetAnchors(FAnchors(0.05f, 0.15f, 0.95f, 0.85f));
+			TextSlot->SetOffsets(FMargin(0.0f));
+			TextSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		}
 	}
 }
 
