@@ -7,6 +7,7 @@
 AShooterBulletTracer::AShooterBulletTracer()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 	bReplicates = false;
 
 	BulletMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BulletMesh"));
@@ -17,12 +18,20 @@ AShooterBulletTracer::AShooterBulletTracer()
 
 void AShooterBulletTracer::Initialize(const FVector& InStart, const FVector& InEnd)
 {
-	StartLocation = InStart;
-	EndLocation = InEnd;
-	SetActorLocation(InStart);
 	Age = 0.0f;
+	bSkipFirstTick = true;
 
 	const FVector Dir = (InEnd - InStart).GetSafeNormal();
+	if (Dir.IsNearlyZero())
+	{
+		Destroy();
+		return;
+	}
+
+	const FVector MeshOffsetVec = Dir * MeshPivotOffset;
+	StartLocation = InStart - MeshOffsetVec;
+	EndLocation = InEnd - MeshOffsetVec;
+
 	FVector Scale = FVector::OneVector;
 
 	switch (ForwardAxis)
@@ -42,11 +51,19 @@ void AShooterBulletTracer::Initialize(const FVector& InStart, const FVector& InE
 	}
 
 	BulletMesh->SetWorldScale3D(Scale);
+	SetActorLocation(StartLocation);
+	SetActorTickEnabled(true);
 }
 
 void AShooterBulletTracer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (bSkipFirstTick)
+	{
+		bSkipFirstTick = false;
+		return;
+	}
 
 	Age += DeltaTime;
 

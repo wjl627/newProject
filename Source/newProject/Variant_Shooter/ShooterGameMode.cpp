@@ -12,9 +12,31 @@
 #include "TimerManager.h"
 #include "newProject.h"
 
+AShooterGameMode::AShooterGameMode()
+{
+	GameStateClass = AShooterGameState::StaticClass();
+}
+
 void AShooterGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Enter lobby state — GameState replicates to all clients
+	if (AShooterGameState* GS = GetGameState<AShooterGameState>())
+	{
+		GS->SetMatchState(EMatchState::Lobby);
+	}
+}
+
+void AShooterGameMode::StartMatch()
+{
+	AShooterGameState* GS = GetGameState<AShooterGameState>();
+	if (!HasAuthority() || !GS || GS->GetMatchState() != EMatchState::Lobby)
+	{
+		return;
+	}
+
+	GS->SetMatchState(EMatchState::InProgress);
 
 	// Start periodic enemy spawn checks
 	GetWorld()->GetTimerManager().SetTimer(
@@ -34,6 +56,8 @@ void AShooterGameMode::BeginPlay()
 		1.0f,
 		true
 	);
+
+	UE_LOG(LognewProject, Log, TEXT("Match started! Duration: %.0fs"), MatchDuration);
 }
 
 void AShooterGameMode::IncrementTeamScore(uint8 TeamByte)
@@ -162,7 +186,13 @@ void AShooterGameMode::TickMatchTime()
 
 	RemainingTime = FMath::Max(0.0f, RemainingTime - 1.0f);
 
-	// Send remaining time to all players
+	// Update remaining time on GameState (replicates to all clients)
+	if (AShooterGameState* GS = GetGameState<AShooterGameState>())
+	{
+		GS->SetRemainingTime(RemainingTime);
+	}
+
+	// Send remaining time to all players (Client RPC for HUD display)
 	const int32 RemainingSeconds = FMath::CeilToInt(RemainingTime);
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
@@ -217,23 +247,25 @@ void AShooterGameMode::EndMatch()
 		RankingText += FString::Printf(TEXT("%s: %s  (%d pts)\n"), PlaceNames[i], *PlayerName, Entries[i].Score);
 	}
 
-	if (Entries.Num() == 0)
-	{
-		RankingText += TEXT("No players scored");
-	}
-
 	UE_LOG(LognewProject, Warning, TEXT("Ranking:\n%s"), *RankingText);
 
-	// Send same ranking to ALL players + freeze input
+	// Send ranking BEFORE SetMatchState so widget updates in game mode
+	int32 PCCount = 0;
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
 		if (AShooterPlayerController* PC = Cast<AShooterPlayerController>(It->Get()))
 		{
+			++PCCount;
 			PC->Client_ShowMatchRanking(RankingText);
-			PC->SetIgnoreMoveInput(true);
-			PC->SetIgnoreLookInput(true);
-			if (APawn* Pawn = PC->GetPawn()) { Pawn->DisableInput(nullptr); }
 		}
+	}
+	UE_LOG(LognewProject, Warning, TEXT("EndMatch: Sent ranking to %d player controllers"), PCCount);
+
+	// Switch to Ended state AFTER ranking RPCs (triggers input blocking on clients)
+	AShooterGameState* GS = GetGameState<AShooterGameState>();
+	if (GS)
+	{
+		GS->SetMatchState(EMatchState::Ended);
 	}
 
 	// Cleanup

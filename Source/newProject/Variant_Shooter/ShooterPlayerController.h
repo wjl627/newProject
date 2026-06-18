@@ -11,6 +11,7 @@ class AShooterCharacter;
 class UShooterBulletCounterUI;
 class UShooterUI;
 class UBuffMessageUI;
+enum class EMatchState : uint8;
 
 /**
  *  Simple PlayerController for a first person shooter game
@@ -68,9 +69,33 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UShooterUI> ScoreboardUI;
 
+	/** Whether the match has started (blocks UI updates during lobby) */
+	bool bMatchStarted = false;
+
+
+	/** Buff message widget class (blueprint subclass) */
+	UPROPERTY(EditAnywhere, Category="Shooter|UI")
+	TSubclassOf<UBuffMessageUI> BuffMessageUIClass;
+
 	/** Widget for showing buff notification messages */
 	UPROPERTY()
 	TObjectPtr<UBuffMessageUI> BuffMessageWidget;
+
+	/** Main menu widget class (host / join session) */
+	UPROPERTY(EditAnywhere, Category="Shooter|UI")
+	TSubclassOf<UUserWidget> MainMenuWidgetClass;
+
+	/** Lobby widget class (player list + start button) */
+	UPROPERTY(EditAnywhere, Category="Shooter|UI")
+	TSubclassOf<UUserWidget> LobbyWidgetClass;
+
+	/** Pointer to the main menu widget */
+	UPROPERTY()
+	TObjectPtr<UUserWidget> MainMenuWidget;
+
+	/** Pointer to the lobby widget */
+	UPROPERTY()
+	TObjectPtr<UUserWidget> LobbyWidget;
 
 protected:
 
@@ -104,7 +129,16 @@ protected:
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
 
+	/** Remove all Enhanced Input mapping contexts (blocks game input) */
+	void BlockAllGameInput();
+
+	/** Re-add Enhanced Input mapping contexts (enables game input) */
+	void EnableGameInput();
+
 public:
+	bool bIsHost = false;
+	void ShowMainMenu();
+	void ShowLobby();
 
 	/** Client RPC to update the player's score on this client */
 	UFUNCTION(Client, Reliable)
@@ -122,11 +156,17 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_UpdateMatchTime(int32 RemainingSeconds);
 
-	/** Client RPC to announce the match result */
-	UFUNCTION(Client, Reliable)
-	void Client_AnnounceMatchResult(bool bIsWinner, const FString& WinnerName, int32 WinnerScore, int32 MyScore);
-
 	/** Client RPC to show the match ranking (same for all players) */
 	UFUNCTION(Client, Reliable)
 	void Client_ShowMatchRanking(const FString& RankingText);
+
+	/** Called by GameState OnRep when match state changes (runs on each client) */
+	void OnMatchStateChanged(EMatchState NewState);
+
+	/** Server RPC: host requests to start the match */
+	UFUNCTION(Server, Reliable)
+	void Server_StartMatch();
+
+	/** Called when the host presses Enter in lobby */
+	void OnLobbyStartPressed();
 };

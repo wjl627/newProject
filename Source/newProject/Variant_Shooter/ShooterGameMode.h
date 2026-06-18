@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "ShooterGameState.h"
 #include "ShooterGameMode.generated.h"
 
 class AShooterNPC;
@@ -16,6 +17,9 @@ UCLASS(abstract)
 class NEWPROJECT_API AShooterGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
+
+public:
+	AShooterGameMode();
 
 protected:
 
@@ -43,7 +47,7 @@ protected:
 
 	/** Match duration in seconds */
 	UPROPERTY(EditAnywhere, Category="Match", meta = (ClampMin = 60, ClampMax = 3600, Units = "s"))
-	float MatchDuration = 900.0f;
+	float MatchDuration = 60.0f;
 
 	/** Remaining match time in seconds */
 	float RemainingTime = 0.0f;
@@ -66,6 +70,10 @@ protected:
 	void EndMatch();
 
 public:
+
+	/** Starts the match (called by host from lobby) */
+	UFUNCTION(BlueprintCallable, Category="Match")
+	void StartMatch();
 
 	/** Increases the score for the given team */
 	void IncrementTeamScore(uint8 TeamByte);

@@ -11,9 +11,10 @@
 #include "ShooterBulletCounterUI.h"
 #include "ShooterUI.h"
 #include "BuffMessageUI.h"
-#include "MatchResultOverlay.h"
 #include "ShooterGameMode.h"
+#include "ShooterGameInstance.h"
 #include "Engine/Engine.h"
+#include "SocketSubsystem.h"
 #include "newProject.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
@@ -21,59 +22,62 @@ void AShooterPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// only spawn touch controls on local player controllers
-	if (IsLocalPlayerController())
+	ENetMode NetMode = GetWorld()->GetNetMode();
+	bIsHost = (NetMode != NM_Client);
+
+	BlockAllGameInput();
+
+	if (!IsLocalPlayerController())
 	{
-		if (ShouldUseTouchControls())
+		return;
+	}
+
+	// Create game HUD widgets (hidden during menus, shown during gameplay)
+	if (ShouldUseTouchControls())
+	{
+		MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
+		if (MobileControlsWidget)
 		{
-			// spawn the mobile controls widget
-			MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
-
-			if (MobileControlsWidget)
-			{
-				// add the controls to the player screen
-				MobileControlsWidget->AddToPlayerScreen(0);
-
-			} else {
-
-				UE_LOG(LognewProject, Error, TEXT("Could not spawn mobile controls widget."));
-
-			}
+			MobileControlsWidget->AddToPlayerScreen(0);
 		}
+	}
 
-		// create the bullet counter widget and add it to the screen
-		// fall back to C++ base class if no blueprint class is set
-		TSubclassOf<UShooterBulletCounterUI> UIClass = BulletCounterUIClass;
-		if (!UIClass)
-		{
-			UIClass = UShooterBulletCounterUI::StaticClass();
-		}
+	TSubclassOf<UShooterBulletCounterUI> UIClass = BulletCounterUIClass;
+	if (!UIClass)
+	{
+		UIClass = UShooterBulletCounterUI::StaticClass();
+	}
+	BulletCounterUI = CreateWidget<UShooterBulletCounterUI>(this, UIClass);
+	if (BulletCounterUI)
+	{
+		BulletCounterUI->AddToPlayerScreen(0);
+	}
 
-		BulletCounterUI = CreateWidget<UShooterBulletCounterUI>(this, UIClass);
+	ScoreboardUI = CreateWidget<UShooterUI>(this, ScoreboardUIClass);
+	if (ScoreboardUI)
+	{
+		ScoreboardUI->AddToViewport(1);
+	}
 
-		if (BulletCounterUI)
-		{
-			BulletCounterUI->AddToPlayerScreen(0);
-		}
-		else
-		{
-			UE_LOG(LognewProject, Error, TEXT("Could not spawn bullet counter widget."));
-		}
+	TSubclassOf<UBuffMessageUI> BuffClass = BuffMessageUIClass;
+	if (!BuffClass)
+	{
+		BuffClass = UBuffMessageUI::StaticClass();
+	}
+	BuffMessageWidget = CreateWidget<UBuffMessageUI>(this, BuffClass);
+	if (BuffMessageWidget)
+	{
+		BuffMessageWidget->AddToViewport(10);
+	}
 
-		// create the scoreboard widget and add it to the screen
-		ScoreboardUI = CreateWidget<UShooterUI>(this, ScoreboardUIClass);
-
-		if (ScoreboardUI)
-		{
-			ScoreboardUI->AddToViewport(1);
-		}
-
-		BuffMessageWidget = CreateWidget<UBuffMessageUI>(this, UBuffMessageUI::StaticClass());
-		if (BuffMessageWidget)
-		{
-			BuffMessageWidget->AddToPlayerScreen(10);
-		}
-
+	// Standalone = first launch (main menu). ListenServer/Client = show lobby (match starts when host presses Enter).
+	if (NetMode == NM_Standalone)
+	{
+		ShowMainMenu();
+	}
+	else if (NetMode == NM_ListenServer || NetMode == NM_Client)
+	{
+		ShowLobby();
 	}
 }
 
@@ -101,6 +105,8 @@ void AShooterPlayerController::SetupInputComponent()
 				}
 			}
 		}
+		// Bind Enter key for lobby start
+		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AShooterPlayerController::OnLobbyStartPressed);
 	}
 }
 
@@ -165,41 +171,63 @@ void AShooterPlayerController::SetupShooterCharacterUI(AShooterCharacter* Shoote
 
 void AShooterPlayerController::OnPawnDestroyed(AActor* DestroyedActor)
 {
-	// reset HUD on the owning client
 	if (IsLocalPlayerController() && IsValid(BulletCounterUI))
 	{
 		BulletCounterUI->SetAmmo(0, 0);
 	}
 
-	// respawn is server-authoritative
 	if (!HasAuthority())
 	{
 		return;
 	}
 
-	// find the player start
-	TArray<AActor*> ActorList;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(), ActorList);
-
-	if (ActorList.Num() > 0)
+	TArray<AActor*> PlayerStarts;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(), PlayerStarts);
+	if (PlayerStarts.Num() == 0)
 	{
-		// select a random player start
-		AActor* RandomPlayerStart = ActorList[FMath::RandRange(0, ActorList.Num() - 1)];
+		return;
+	}
 
-		// spawn a character at the player start
-		const FTransform SpawnTransform = RandomPlayerStart->GetActorTransform();
-
-		if (AShooterCharacter* RespawnedCharacter = GetWorld()->SpawnActor<AShooterCharacter>(CharacterClass, SpawnTransform))
+	// Gather alive player positions to avoid spawning on top of them
+	TArray<FVector> AlivePositions;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (APlayerController* OtherPC = It->Get())
 		{
-			// possess the character
-			Possess(RespawnedCharacter);
+			if (OtherPC != this && OtherPC->GetPawn() && !OtherPC->GetPawn()->ActorHasTag(TEXT("Dead")))
+			{
+				AlivePositions.Add(OtherPC->GetPawn()->GetActorLocation());
+			}
 		}
+	}
+
+	// Pick the PlayerStart farthest from any alive player
+	AActor* BestStart = PlayerStarts[0];
+	float BestMinDist = -1.0f;
+	for (AActor* Start : PlayerStarts)
+	{
+		float MinDistSq = MAX_FLT;
+		for (const FVector& Loc : AlivePositions)
+		{
+			MinDistSq = FMath::Min(MinDistSq, FVector::DistSquared(Start->GetActorLocation(), Loc));
+		}
+		if (MinDistSq > BestMinDist)
+		{
+			BestMinDist = MinDistSq;
+			BestStart = Start;
+		}
+	}
+
+	const FTransform SpawnTransform = BestStart->GetActorTransform();
+	if (AShooterCharacter* RespawnedCharacter = GetWorld()->SpawnActor<AShooterCharacter>(CharacterClass, SpawnTransform))
+	{
+		Possess(RespawnedCharacter);
 	}
 }
 
 void AShooterPlayerController::OnBulletCountUpdated(int32 MagazineSize, int32 Bullets)
 {
-	if (BulletCounterUI)
+	if (bMatchStarted && BulletCounterUI)
 	{
 		BulletCounterUI->SetAmmo(MagazineSize, Bullets);
 	}
@@ -207,7 +235,7 @@ void AShooterPlayerController::OnBulletCountUpdated(int32 MagazineSize, int32 Bu
 
 void AShooterPlayerController::OnPawnDamaged(float LifePercent)
 {
-	if (BulletCounterUI)
+	if (bMatchStarted && BulletCounterUI)
 	{
 		BulletCounterUI->SetHealthPercent(LifePercent);
 	}
@@ -237,6 +265,7 @@ void AShooterPlayerController::Client_UpdateTeamScore_Implementation(uint8 TeamB
 
 void AShooterPlayerController::Client_ShowBuffMessage_Implementation(const FString& Message, FColor Color)
 {
+
 	if (BuffMessageWidget)
 	{
 		BuffMessageWidget->Show(Message, Color);
@@ -245,75 +274,157 @@ void AShooterPlayerController::Client_ShowBuffMessage_Implementation(const FStri
 
 void AShooterPlayerController::Client_UpdateMatchTime_Implementation(int32 RemainingSeconds)
 {
-	const int32 Minutes = RemainingSeconds / 60;
-	const int32 Seconds = RemainingSeconds % 60;
-	const FString TimeStr = FString::Printf(TEXT("Time: %02d:%02d"), Minutes, Seconds);
-
-	GEngine->AddOnScreenDebugMessage(1, 1.5f, FColor::White, TimeStr);
-
 	if (ScoreboardUI)
 	{
 		ScoreboardUI->BP_UpdateMatchTime(RemainingSeconds);
 	}
 }
 
-void AShooterPlayerController::Client_AnnounceMatchResult_Implementation(bool bIsWinner, const FString& WinnerName, int32 WinnerScore, int32 MyScore)
+void AShooterPlayerController::Client_ShowMatchRanking_Implementation(const FString& RankingText)
 {
-	const FString ResultLine = bIsWinner
-		? FString::Printf(TEXT("YOU WIN!  Score: %d"), MyScore)
-		: FString::Printf(TEXT("GAME OVER  Winner: %s (%d pts)  Your Score: %d"), *WinnerName, WinnerScore, MyScore);
-
-	UE_LOG(LognewProject, Warning, TEXT("Match Result: %s"), *ResultLine);
-
-	// Hide the bullet counter UI
-	if (BulletCounterUI)
-	{
-		BulletCounterUI->SetVisibility(ESlateVisibility::Collapsed);
-	}
-
-	// Create a fresh result overlay widget (no blueprint dependency)
-	if (UMatchResultOverlay* ResultOverlay = CreateWidget<UMatchResultOverlay>(this, UMatchResultOverlay::StaticClass()))
-	{
-		ResultOverlay->SetResult(ResultLine, bIsWinner ? FColor::Yellow : FColor::Red);
-		ResultOverlay->AddToViewport(100);
-	}
-
 	if (ScoreboardUI)
 	{
-		ScoreboardUI->BP_AnnounceMatchResult(bIsWinner, WinnerName, WinnerScore, MyScore);
+		ScoreboardUI->BP_ShowMatchRanking(RankingText);
 	}
 
-	// Block all game input on this client
+	BlockAllGameInput();
 	SetInputMode(FInputModeUIOnly());
-	SetIgnoreMoveInput(true);
-	SetIgnoreLookInput(true);
 	bShowMouseCursor = true;
-	if (APawn* MyPawn = GetPawn())
+}
+
+void AShooterPlayerController::OnMatchStateChanged(EMatchState NewState)
+{
+	switch (NewState)
 	{
-		MyPawn->DisableInput(this);
+	case EMatchState::Lobby:
+		BlockAllGameInput();
+		break;
+
+	case EMatchState::InProgress:
+		bMatchStarted = true;
+		// Remove menu / lobby widgets
+		if (MainMenuWidget)
+		{
+			MainMenuWidget->RemoveFromParent();
+			MainMenuWidget = nullptr;
+		}
+		if (LobbyWidget)
+		{
+			LobbyWidget->RemoveFromParent();
+			LobbyWidget = nullptr;
+		}
+		EnableGameInput();
+		break;
+
+	case EMatchState::Ended:
+		BlockAllGameInput();
+		SetInputMode(FInputModeUIOnly());
+		bShowMouseCursor = true;
+		break;
 	}
 }
 
-void AShooterPlayerController::Client_ShowMatchRanking_Implementation(const FString& RankingText)
+void AShooterPlayerController::Server_StartMatch_Implementation()
 {
-	if (BulletCounterUI)
+	if (AShooterGameMode* GM = Cast<AShooterGameMode>(GetWorld()->GetAuthGameMode()))
 	{
-		BulletCounterUI->ShowMatchRanking(RankingText);
+		GM->StartMatch();
+	}
+}
+
+void AShooterPlayerController::BlockAllGameInput()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
 	}
 
-	// Debug display (bypasses UMG, visible even if UMG fails)
-	if (GEngine)
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 	{
-		GEngine->AddOnScreenDebugMessage(999, 15.0f, FColor::Yellow, RankingText);
+		for (UInputMappingContext* Context : DefaultMappingContexts)
+		{
+			Subsystem->RemoveMappingContext(Context);
+		}
+		for (UInputMappingContext* Context : MobileExcludedMappingContexts)
+		{
+			Subsystem->RemoveMappingContext(Context);
+		}
+	}
+}
+
+void AShooterPlayerController::EnableGameInput()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
 	}
 
-	// Block input on this client
-	SetInputMode(FInputModeUIOnly());
-	SetIgnoreMoveInput(true);
-	SetIgnoreLookInput(true);
-	bShowMouseCursor = true;
-	if (APawn* MyPawn = GetPawn())
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 	{
-		MyPawn->DisableInput(this);
+		for (UInputMappingContext* Context : DefaultMappingContexts)
+		{
+			Subsystem->AddMappingContext(Context, 0);
+		}
+		if (!ShouldUseTouchControls())
+		{
+			for (UInputMappingContext* Context : MobileExcludedMappingContexts)
+			{
+				Subsystem->AddMappingContext(Context, 0);
+			}
+		}
+	}
+}
+
+void AShooterPlayerController::ShowMainMenu()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (LobbyWidget)
+	{
+		LobbyWidget->RemoveFromParent();
+		LobbyWidget = nullptr;
+	}
+
+	if (MainMenuWidgetClass && !MainMenuWidget)
+	{
+		MainMenuWidget = CreateWidget<UUserWidget>(this, MainMenuWidgetClass);
+		if (MainMenuWidget)
+		{
+			MainMenuWidget->AddToViewport(100);
+		}
+	}
+}
+
+void AShooterPlayerController::ShowLobby()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (MainMenuWidget)
+	{
+		MainMenuWidget->RemoveFromParent();
+		MainMenuWidget = nullptr;
+	}
+
+	if (LobbyWidgetClass && !LobbyWidget)
+	{
+		LobbyWidget = CreateWidget<UUserWidget>(this, LobbyWidgetClass);
+		if (LobbyWidget)
+		{
+			LobbyWidget->AddToViewport(100);
+		}
+	}
+}
+
+void AShooterPlayerController::OnLobbyStartPressed()
+{
+	if (HasAuthority())
+	{
+		Server_StartMatch();
 	}
 }

@@ -44,6 +44,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	float StreakScale = 6.0f;
 
+	/** Half-length of the mesh along the forward axis. Compensates for pivot not at endpoint. Set to ~half your mesh length */
+	UPROPERTY(EditAnywhere, Category="Tracer")
+	float MeshPivotOffset = 0.0f;
+
 	/** The axis of the mesh that points forward along the flight path */
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	ETracerForwardAxis ForwardAxis = ETracerForwardAxis::ZAxis;
@@ -51,4 +55,7 @@ protected:
 	FVector StartLocation;
 	FVector EndLocation;
 	float Age = 0.0f;
+
+	/** Skips the first tick to avoid same-frame movement when spawned during net receive in multiplayer */
+	bool bSkipFirstTick = true;
 };
