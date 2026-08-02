@@ -5,14 +5,26 @@
 #include "OnlineSessionSettings.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
+#include "Engine/NetDriver.h"
+#include "GameFramework/PlayerController.h"
+#include "SocketSubsystem.h"
+#include "IPAddress.h"
 #include "newProject.h"
 
 static const FName SESSION_NAME = TEXT("ShooterSession");
 static const FName SETTING_MAP = TEXT("MAP_NAME");
+static const TCHAR* MainMenuMapURL = TEXT("/Game/FirstPerson/Lvl_FirstPerson");
 
 void UShooterGameInstance::Init()
 {
 	Super::Init();
+
+	if (GEngine)
+	{
+		GEngine->OnNetworkFailure().AddUObject(this, &UShooterGameInstance::OnEngineNetworkFailure);
+		GEngine->OnTravelFailure().AddUObject(this, &UShooterGameInstance::OnEngineTravelFailure);
+	}
 
 	IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
 	if (Subsystem)
@@ -31,6 +43,12 @@ void UShooterGameInstance::Init()
 
 void UShooterGameInstance::Shutdown()
 {
+	if (GEngine)
+	{
+		GEngine->OnNetworkFailure().RemoveAll(this);
+		GEngine->OnTravelFailure().RemoveAll(this);
+	}
+
 	if (SessionInterface.IsValid())
 	{
 		SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(OnCreateSessionCompleteHandle);
@@ -38,6 +56,89 @@ void UShooterGameInstance::Shutdown()
 		SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(OnJoinSessionCompleteHandle);
 	}
 	Super::Shutdown();
+}
+
+FString UShooterGameInstance::GetLocalIPAddress() const
+{
+	ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+	if (!SocketSubsystem)
+	{
+		return TEXT("127.0.0.1");
+	}
+
+	bool bCanBindAll = false;
+	TSharedRef<FInternetAddr> LocalAddr = SocketSubsystem->GetLocalHostAddr(*GLog, bCanBindAll);
+	if (LocalAddr->IsValid())
+	{
+		return LocalAddr->ToString(false);
+	}
+
+	return TEXT("127.0.0.1");
+}
+
+FString UShooterGameInstance::GetLocalHostAddress() const
+{
+	return FString::Printf(TEXT("%s:%d"), *GetLocalIPAddress(), DefaultListenPort);
+}
+
+void UShooterGameInstance::OnEngineNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString)
+{
+	if (World != GetWorld())
+	{
+		return;
+	}
+
+	const FString Message = ErrorString.IsEmpty()
+		? FString::Printf(TEXT("网络错误: %s"), ENetworkFailure::ToString(FailureType))
+		: ErrorString;
+	NotifyNetworkFailure(Message);
+}
+
+void UShooterGameInstance::OnEngineTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& ErrorString)
+{
+	if (World != GetWorld())
+	{
+		return;
+	}
+
+	const FString Message = ErrorString.IsEmpty()
+		? FString::Printf(TEXT("旅行失败: %s"), ETravelFailure::ToString(FailureType))
+		: ErrorString;
+	NotifyNetworkFailure(Message);
+}
+
+void UShooterGameInstance::NotifyNetworkFailure(const FString& ErrorString)
+{
+	UE_LOG(LognewProject, Error, TEXT("[GameInstance] %s"), *ErrorString);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Red, ErrorString);
+	}
+
+	OnNetworkFailure.Broadcast(ErrorString);
+	ReturnToMainMenuMap();
+}
+
+void UShooterGameInstance::ReturnToMainMenuMap()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const FString CurrentMap = UGameplayStatics::GetCurrentLevelName(World, true);
+	if (CurrentMap.Equals(TEXT("Lvl_FirstPerson"), ESearchCase::IgnoreCase)
+		&& World->GetNetMode() == NM_Standalone)
+	{
+		return;
+	}
+
+	if (APlayerController* PC = GetFirstLocalPlayerController())
+	{
+		PC->ClientTravel(MainMenuMapURL, TRAVEL_Absolute);
+	}
 }
 
 void UShooterGameInstance::HostGame(int32 MaxPlayers)
@@ -185,6 +286,7 @@ void UShooterGameInstance::OnJoinSessionComplete(FName SessionName, EOnJoinSessi
 	if (Result != EOnJoinSessionCompleteResult::Success)
 	{
 		UE_LOG(LognewProject, Error, TEXT("[GameInstance] Join session failed: %d"), (int32)Result);
+		NotifyNetworkFailure(FString::Printf(TEXT("加入房间失败: %d"), static_cast<int32>(Result)));
 		return;
 	}
 

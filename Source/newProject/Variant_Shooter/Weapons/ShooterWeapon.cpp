@@ -10,6 +10,7 @@
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -192,9 +193,53 @@ void AShooterWeapon::FireCooldownExpired()
 	WeaponOwner->OnSemiWeaponRefire();
 }
 
+FVector AShooterWeapon::GetMuzzleLocation() const
+{
+	auto TryGetSocketLocation = [this](USkeletalMeshComponent* Mesh, FVector& OutLocation) -> bool
+	{
+		if (Mesh && !MuzzleSocketName.IsNone() && Mesh->DoesSocketExist(MuzzleSocketName))
+		{
+			OutLocation = Mesh->GetSocketLocation(MuzzleSocketName);
+			return true;
+		}
+		return false;
+	};
+
+	USkeletalMeshComponent* VisualMesh = ThirdPersonMesh;
+
+	if (PawnOwner)
+	{
+		if (const APlayerController* PC = GetWorld()->GetFirstPlayerController())
+		{
+			if (PC->GetPawn() == PawnOwner && PawnOwner->IsLocallyControlled())
+			{
+				VisualMesh = FirstPersonMesh;
+			}
+		}
+	}
+
+	FVector SocketLocation = FVector::ZeroVector;
+	if (TryGetSocketLocation(VisualMesh, SocketLocation))
+	{
+		return SocketLocation;
+	}
+
+	if (VisualMesh != FirstPersonMesh && TryGetSocketLocation(FirstPersonMesh, SocketLocation))
+	{
+		return SocketLocation;
+	}
+
+	if (VisualMesh != ThirdPersonMesh && TryGetSocketLocation(ThirdPersonMesh, SocketLocation))
+	{
+		return SocketLocation;
+	}
+
+	return VisualMesh ? VisualMesh->GetComponentLocation() : GetActorLocation();
+}
+
 void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 {
-	const FVector EyeLoc = PawnOwner ? PawnOwner->GetPawnViewLocation() : FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
+	const FVector EyeLoc = PawnOwner ? PawnOwner->GetPawnViewLocation() : GetMuzzleLocation();
 	const FVector AimDir = (TargetLocation - EyeLoc).GetSafeNormal();
 	const FVector TraceEnd = EyeLoc + AimDir * FMath::Max(MaxFireRange, FVector::Dist(EyeLoc, TargetLocation) + 500.0f);
 
@@ -227,7 +272,7 @@ void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 
 	--CurrentBullets;
 
-	Multicast_OnFireEffects(CurrentBullets, ImpactPoint);
+	Multicast_OnFireEffects(CurrentBullets, ImpactPoint, EyeLoc, AimDir);
 
 	if (CurrentBullets <= 0)
 	{
@@ -235,7 +280,7 @@ void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 	}
 }
 
-void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, const FVector& ImpactPoint)
+void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, const FVector& ImpactPoint, const FVector& EyeLocation, const FVector& AimDirection)
 {
 	CurrentBullets = BulletCount;
 
@@ -248,16 +293,23 @@ void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, c
 
 	if (TracerClass)
 	{
-		const FVector MuzzleLocation = FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
+		const FVector SafeAimDir = AimDirection.GetSafeNormal();
+		if (SafeAimDir.IsNearlyZero())
+		{
+			return;
+		}
+
+		const FVector MuzzleLocation = GetMuzzleLocation();
+		const float HitDistance = FVector::Dist(EyeLocation, ImpactPoint);
+		const FVector TracerStart = MuzzleLocation + SafeAimDir * MuzzleOffset;
+		const FVector TracerEnd = TracerStart + SafeAimDir * HitDistance;
 
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 		if (AShooterBulletTracer* Tracer = GetWorld()->SpawnActor<AShooterBulletTracer>(TracerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams))
 		{
-			const FVector Dir = (ImpactPoint - MuzzleLocation).GetSafeNormal();
-			const FVector TracerStart = MuzzleLocation + Dir * MuzzleOffset;
-			Tracer->Initialize(TracerStart, ImpactPoint);
+			Tracer->Initialize(TracerStart, TracerEnd);
 		}
 	}
 }

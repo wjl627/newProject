@@ -44,13 +44,13 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	float StreakScale = 6.0f;
 
-	/** Half-length of the mesh along the forward axis. Compensates for pivot not at endpoint. Set to ~half your mesh length */
+	/** Optional extra nudge along the flight direction. The rear end is auto-aligned to the muzzle from mesh bounds; use this only to fine-tune (+ forward / - backward) */
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	float MeshPivotOffset = 0.0f;
 
-	/** The axis of the mesh that points forward along the flight path */
+	/** The axis of the mesh that points forward along the flight path. Set to match the axis your streak mesh is modeled along */
 	UPROPERTY(EditAnywhere, Category="Tracer")
-	ETracerForwardAxis ForwardAxis = ETracerForwardAxis::ZAxis;
+	ETracerForwardAxis ForwardAxis = ETracerForwardAxis::YAxis;
 
 	FVector StartLocation;
 	FVector EndLocation;

@@ -23,7 +23,7 @@ public class newProject : ModuleRules
 				"SlateCore"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "OnlineSubsystem", "OnlineSubsystemUtils" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "OnlineSubsystem", "OnlineSubsystemUtils", "Sockets" });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"newProject",

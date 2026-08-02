@@ -94,9 +94,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Aim", meta = (ClampMin = 0, ClampMax = 100))
 	float FiringRecoil = 0.0f;
 
-	/** Name of the first person muzzle socket where projectiles will spawn */
+	/** Socket on the weapon mesh where tracers spawn (must exist on both FP and TP meshes) */
 	UPROPERTY(EditAnywhere, Category="Aim")
-	FName MuzzleSocketName;
+	FName MuzzleSocketName = FName("Muzzle");
 
 	/** Distance ahead of the muzzle that bullets will spawn at */
 	UPROPERTY(EditAnywhere, Category="Aim", meta = (ClampMin = 0, ClampMax = 1000, Units = "cm"))
@@ -216,6 +216,9 @@ protected:
 	/** Fire a projectile towards the target location */
 	virtual void FireProjectile(const FVector& TargetLocation);
 
+	/** Returns the muzzle world location using the mesh visible to the local viewer */
+	FVector GetMuzzleLocation() const;
+
 	/** Called when the reload timer expires — refills the magazine */
 	void FinishReload();
 
@@ -279,7 +282,7 @@ public:
 
 	/** Multicast firing effects to all clients */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_OnFireEffects(int32 BulletCount, const FVector& ImpactPoint);
+	void Multicast_OnFireEffects(int32 BulletCount, const FVector& ImpactPoint, const FVector& EyeLocation, const FVector& AimDirection);
 
 	/** Multicast reload effects to all clients */
 	UFUNCTION(NetMulticast, Reliable)

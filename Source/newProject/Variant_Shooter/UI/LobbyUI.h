@@ -25,6 +25,10 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category="Lobby")
 	void SetHostControlsVisible(bool bVisible);
 
+	/** Host-only: LAN address clients should enter, e.g. 192.168.1.10:7777 */
+	UFUNCTION(BlueprintImplementableEvent, Category="Lobby")
+	void OnHostAddressReady(const FString& Address);
+
 protected:
 	void RefreshPlayerList();
 

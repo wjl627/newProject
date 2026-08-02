@@ -1,6 +1,8 @@
 #include "LobbyUI.h"
 #include "ShooterPlayerController.h"
+#include "ShooterGameInstance.h"
 #include "ShooterGameState.h"
+#include "Engine/Engine.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 
@@ -11,6 +13,20 @@ void ULobbyUI::NativeConstruct()
 	if (AShooterPlayerController* PC = GetOwningPlayer<AShooterPlayerController>())
 	{
 		SetHostControlsVisible(PC->bIsHost);
+
+		if (PC->bIsHost)
+		{
+			if (UShooterGameInstance* GI = GetGameInstance<UShooterGameInstance>())
+			{
+				const FString HostAddress = GI->GetLocalHostAddress();
+				OnHostAddressReady(HostAddress);
+				if (GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 12.f, FColor::Cyan,
+						FString::Printf(TEXT("本机联机地址: %s"), *HostAddress));
+				}
+			}
+		}
 	}
 
 	RefreshPlayerList();

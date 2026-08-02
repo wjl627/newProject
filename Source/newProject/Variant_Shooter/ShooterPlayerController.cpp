@@ -14,7 +14,6 @@
 #include "ShooterGameMode.h"
 #include "ShooterGameInstance.h"
 #include "Engine/Engine.h"
-#include "SocketSubsystem.h"
 #include "newProject.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
@@ -313,6 +312,8 @@ void AShooterPlayerController::OnMatchStateChanged(EMatchState NewState)
 			LobbyWidget->RemoveFromParent();
 			LobbyWidget = nullptr;
 		}
+		SetInputMode(FInputModeGameOnly());
+		bShowMouseCursor = false;
 		EnableGameInput();
 		break;
 
@@ -396,6 +397,9 @@ void AShooterPlayerController::ShowMainMenu()
 			MainMenuWidget->AddToViewport(100);
 		}
 	}
+
+	SetInputMode(FInputModeUIOnly());
+	bShowMouseCursor = true;
 }
 
 void AShooterPlayerController::ShowLobby()
@@ -419,6 +423,9 @@ void AShooterPlayerController::ShowLobby()
 			LobbyWidget->AddToViewport(100);
 		}
 	}
+
+	SetInputMode(FInputModeUIOnly());
+	bShowMouseCursor = true;
 }
 
 void AShooterPlayerController::OnLobbyStartPressed()
