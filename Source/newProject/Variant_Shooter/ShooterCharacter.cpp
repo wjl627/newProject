@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "ShooterCharacter.h"
@@ -17,10 +17,10 @@
 
 AShooterCharacter::AShooterCharacter()
 {
-	// create the noise emitter component
+	// 创建噪音发射器组件
 	PawnNoiseEmitter = CreateDefaultSubobject<UPawnNoiseEmitterComponent>(TEXT("Pawn Noise Emitter"));
 
-	// configure movement
+	// 配置移动
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 600.0f, 0.0f);
 }
 
@@ -49,16 +49,16 @@ void AShooterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// reset HP to max
+	// 将 HP 重置为最大值
 	CurrentHP = MaxHP;
 
-	// identify this character as a player for AI perception
+	// 将该角色标记为玩家，供 AI 感知识别
 	Tags.Add(FName("Player"));
 
-	// update the HUD
+	// 更新 HUD
 	OnDamaged.Broadcast(1.0f);
 
-	// spawn default weapons (server / standalone only)
+	// 生成默认武器（仅服务器 / 单机）
 	if (HasAuthority())
 	{
 		for (const TSubclassOf<AShooterWeapon>& WeaponClass : DefaultWeapons)
@@ -66,7 +66,7 @@ void AShooterCharacter::BeginPlay()
 			AddWeaponClass(WeaponClass);
 		}
 
-		// switch to the first weapon in the array so array order = priority
+		// 切换到数组中的第一把武器，因此数组顺序即优先级
 		if (OwnedWeapons.Num() > 1)
 		{
 			CurrentWeapon->DeactivateWeapon();
@@ -80,30 +80,32 @@ void AShooterCharacter::EndPlay(EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 
-	// clear timers
+	// 清除计时器
 	GetWorld()->GetTimerManager().ClearTimer(RespawnTimer);
 	GetWorld()->GetTimerManager().ClearTimer(WeaponSwitchTimerHandle);
 	GetWorld()->GetTimerManager().ClearTimer(AimUpdateTimer);
+	GetWorld()->GetTimerManager().ClearTimer(RecoilRecoveryTimer);
+	GetWorld()->GetTimerManager().ClearTimer(RecoilSettleTimer);
 	GetWorld()->GetTimerManager().ClearTimer(DamageBoostTimer);
 	GetWorld()->GetTimerManager().ClearTimer(ScoreBoostTimer);
 }
 
 void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// base class handles move, aim and jump inputs
+	// 基类处理移动、瞄准和跳跃输入
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	// Set up action bindings
+	// 设置操作绑定
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		// Firing
+		// 开火
 		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &AShooterCharacter::DoStartFiring);
 		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Completed, this, &AShooterCharacter::DoStopFiring);
 
-		// Switch weapon
+		// 切换武器
 		EnhancedInputComponent->BindAction(SwitchWeaponAction, ETriggerEvent::Started, this, &AShooterCharacter::DoSwitchWeapon);
 
-		// Reload
+		// 换弹
 		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &AShooterCharacter::DoReload);
 	}
 
@@ -111,28 +113,28 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 float AShooterCharacter::TakeDamage(float Damage, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-	// only the server applies damage
+	// 只有服务器应用伤害
 	if (!HasAuthority())
 	{
 		return 0.0f;
 	}
 
-	// ignore if already dead
+	// 已经死亡则忽略
 	if (CurrentHP <= 0.0f)
 	{
 		return 0.0f;
 	}
 
-	// remember who damaged us for kill credit
+	// 记住伤害来源以便记录击杀
 	LastDamageInstigator = EventInstigator;
 
-	// Reduce HP
+	// 减少 HP
 	CurrentHP -= Damage;
 
-	// update the HUD
+	// 更新 HUD
 	OnDamaged.Broadcast(FMath::Max(0.0f, CurrentHP / MaxHP));
 
-	// Have we depleted HP?
+	// HP 是否已耗尽？
 	if (CurrentHP <= 0.0f)
 	{
 		Die();
@@ -143,7 +145,7 @@ float AShooterCharacter::TakeDamage(float Damage, struct FDamageEvent const& Dam
 
 void AShooterCharacter::DoAim(float Yaw, float Pitch)
 {
-	// only route inputs if the character is not dead
+	// 仅在角色未死亡时传递输入
 	if (!IsDead())
 	{
 		Super::DoAim(Yaw, Pitch);
@@ -152,7 +154,7 @@ void AShooterCharacter::DoAim(float Yaw, float Pitch)
 
 void AShooterCharacter::DoMove(float Right, float Forward)
 {
-	// only route inputs if the character is not dead
+	// 仅在角色未死亡时传递输入
 	if (!IsDead())
 	{
 		Super::DoMove(Right, Forward);
@@ -161,7 +163,7 @@ void AShooterCharacter::DoMove(float Right, float Forward)
 
 void AShooterCharacter::DoJumpStart()
 {
-	// only route inputs if the character is not dead
+	// 仅在角色未死亡时传递输入
 	if (!IsDead())
 	{
 		Super::DoJumpStart();
@@ -170,7 +172,7 @@ void AShooterCharacter::DoJumpStart()
 
 void AShooterCharacter::DoJumpEnd()
 {
-	// only route inputs if the character is not dead
+	// 仅在角色未死亡时传递输入
 	if (!IsDead())
 	{
 		Super::DoJumpEnd();
@@ -189,7 +191,7 @@ void AShooterCharacter::DoStartFiring()
 		{
 			Server_StartFiring(GetWeaponTargetLocation());
 
-			// Stream aim updates to server during full-auto fire
+			// 全自动射击期间持续向服务器发送瞄准更新
 			if (CurrentWeapon->IsFullAuto())
 			{
 				GetWorld()->GetTimerManager().SetTimer(
@@ -304,17 +306,17 @@ void AShooterCharacter::SwitchWeapon_Internal()
 
 	bIsSwitchingWeapon = true;
 
-	// stop firing
+	// 停止开火
 	if (CurrentWeapon)
 	{
 		CurrentWeapon->StopFiring();
 	}
 
-	// find the next weapon index
+	// 查找下一把武器的索引
 	const int32 WeaponIndex = OwnedWeapons.Find(CurrentWeapon);
 	PendingWeaponIndex = (WeaponIndex == OwnedWeapons.Num() - 1) ? 0 : WeaponIndex + 1;
 
-	// if the current weapon has an unequip montage, play it before swapping
+	// 如果当前武器有卸下动画，则在切换前播放
 	if (CurrentWeapon && CurrentWeapon->GetUnequipMontage())
 	{
 		Multicast_PlayUnequipMontage(CurrentWeapon->GetUnequipMontage());
@@ -331,7 +333,7 @@ void AShooterCharacter::SwitchWeapon_Internal()
 	}
 	else
 	{
-		// no unequip animation — swap immediately
+		// 没有卸下动画——立即切换
 		PerformWeaponSwap();
 	}
 }
@@ -345,18 +347,18 @@ void AShooterCharacter::PerformWeaponSwap()
 		return;
 	}
 
-	// deactivate old weapon (hides mesh, but ABP is still the old one)
+	// 停用旧武器（隐藏网格，但 ABP 仍是旧的）
 	if (CurrentWeapon)
 	{
 		CurrentWeapon->DeactivateWeapon();
 	}
 
-	// activate new weapon (swaps ABP, but hide mesh until equip anim plays)
+	// 激活新武器（切换 ABP，但在装备动画播放前隐藏网格）
 	CurrentWeapon = OwnedWeapons[PendingWeaponIndex];
 	CurrentWeapon->ActivateWeapon();
 
-	// if the new weapon has an equip montage, hide it for one frame
-	// so the ABP can initialize, then unhide and play the montage together
+	// 如果新武器有装备动画，先隐藏一帧
+	// 让 ABP 完成初始化，再取消隐藏并同时播放动画
 	if (CurrentWeapon && CurrentWeapon->GetEquipMontage())
 	{
 		CurrentWeapon->SetActorHiddenInGame(true);
@@ -388,7 +390,7 @@ void AShooterCharacter::PerformWeaponSwap()
 	}
 	else
 	{
-		// no equip animation — finish immediately
+		// 没有装备动画——立即完成
 		FinishWeaponSwitch();
 	}
 }
@@ -412,10 +414,10 @@ void AShooterCharacter::AttachWeaponMeshes(AShooterWeapon* Weapon)
 {
 	const FAttachmentTransformRules AttachmentRule(EAttachmentRule::SnapToTarget, false);
 
-	// attach the weapon actor
+	// 挂接武器 Actor
 	Weapon->AttachToActor(this, AttachmentRule);
 
-	// attach the weapon meshes
+	// 挂接武器网格
 	Weapon->GetFirstPersonMesh()->AttachToComponent(GetFirstPersonMesh(), AttachmentRule, FirstPersonWeaponSocket);
 	Weapon->GetThirdPersonMesh()->AttachToComponent(GetMesh(), AttachmentRule, FirstPersonWeaponSocket);
 
@@ -423,10 +425,12 @@ void AShooterCharacter::AttachWeaponMeshes(AShooterWeapon* Weapon)
 
 void AShooterCharacter::PlayFiringMontage(UAnimMontage* Montage)
 {
-	if (Montage && GetFirstPersonMesh())
+	if (!bPlayFiringMontage || !Montage || !GetFirstPersonMesh())
 	{
-		GetFirstPersonMesh()->GetAnimInstance()->Montage_Play(Montage);
+		return;
 	}
+
+	GetFirstPersonMesh()->GetAnimInstance()->Montage_Play(Montage);
 }
 
 void AShooterCharacter::PlayEquipMontage(UAnimMontage* Montage)
@@ -455,8 +459,106 @@ void AShooterCharacter::PlayReloadMontage(UAnimMontage* Montage)
 
 void AShooterCharacter::AddWeaponRecoil(float Recoil)
 {
-	// apply the recoil as pitch input
-	AddControllerPitchInput(Recoil);
+	if (IsDead())
+	{
+		return;
+	}
+
+	// 如果武器没有配置后坐力，则回退到角色默认值
+	const float KickAmount = Recoil > 0.0f ? Recoil : DefaultWeaponRecoil;
+	if (KickAmount <= 0.0f)
+	{
+		return;
+	}
+
+	// 给相机施加带随机性的向上冲击，并附加较小的随机水平冲击
+	const float PitchKick = FMath::Min(FMath::FRandRange(KickAmount * 0.8f, KickAmount * 1.2f), MaxRecoilPitchPerShot);
+	const float YawKick = FMath::FRandRange(-1.0f, 1.0f) * PitchKick * RecoilYawRatio;
+
+	// 直接将冲击应用到控制旋转上，使方向始终垂直向上，不受输入缩放或反转设置影响。
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FRotator ControlRotation = PC->GetControlRotation();
+		ControlRotation.Pitch += PitchKick;
+		ControlRotation.Yaw += YawKick;
+		PC->SetControlRotation(ControlRotation);
+	}
+
+	CurrentRecoilPitch = FMath::Min(CurrentRecoilPitch + PitchKick, MaxRecoilPitch);
+	CurrentRecoilYaw = FMath::Clamp(CurrentRecoilYaw + YawKick, -MaxRecoilYaw, MaxRecoilYaw);
+
+	// 开火期间不恢复：重置稳定计时器，使相机仅在停止射击后才开始回位
+	GetWorldTimerManager().ClearTimer(RecoilSettleTimer);
+	GetWorldTimerManager().SetTimer(RecoilSettleTimer, this, &AShooterCharacter::StartRecoilRecovery, RecoilSettleDelay, false);
+}
+
+void AShooterCharacter::StartRecoilRecovery()
+{
+	if (FMath::IsNearlyZero(CurrentRecoilPitch) && FMath::IsNearlyZero(CurrentRecoilYaw))
+	{
+		return;
+	}
+
+	if (!GetWorldTimerManager().IsTimerActive(RecoilRecoveryTimer))
+	{
+		GetWorldTimerManager().SetTimer(RecoilRecoveryTimer, this, &AShooterCharacter::UpdateRecoilRecovery, 1.0f / 60.0f, true);
+	}
+}
+
+void AShooterCharacter::UpdateRecoilRecovery()
+{
+	const float DeltaTime = 1.0f / 60.0f;
+	const float Step = RecoilRecoverySpeed * DeltaTime;
+
+	// 俯仰：向零回位
+	if (FMath::Abs(CurrentRecoilPitch) > Step)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			FRotator ControlRotation = PC->GetControlRotation();
+			ControlRotation.Pitch -= Step;
+			PC->SetControlRotation(ControlRotation);
+		}
+		CurrentRecoilPitch -= Step;
+	}
+	else
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			FRotator ControlRotation = PC->GetControlRotation();
+			ControlRotation.Pitch -= CurrentRecoilPitch;
+			PC->SetControlRotation(ControlRotation);
+		}
+		CurrentRecoilPitch = 0.0f;
+	}
+
+	// 偏航：向零回位
+	if (FMath::Abs(CurrentRecoilYaw) > Step)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			FRotator ControlRotation = PC->GetControlRotation();
+			ControlRotation.Yaw -= FMath::Sign(CurrentRecoilYaw) * Step;
+			PC->SetControlRotation(ControlRotation);
+		}
+		CurrentRecoilYaw -= FMath::Sign(CurrentRecoilYaw) * Step;
+	}
+	else
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			FRotator ControlRotation = PC->GetControlRotation();
+			ControlRotation.Yaw -= CurrentRecoilYaw;
+			PC->SetControlRotation(ControlRotation);
+		}
+		CurrentRecoilYaw = 0.0f;
+	}
+
+	// 相机完全回到射击前瞄准位置后停止计时器
+	if (FMath::IsNearlyZero(CurrentRecoilPitch) && FMath::IsNearlyZero(CurrentRecoilYaw))
+	{
+		GetWorldTimerManager().ClearTimer(RecoilRecoveryTimer);
+	}
 }
 
 void AShooterCharacter::UpdateWeaponHUD(int32 CurrentAmmo, int32 MagazineSize)
@@ -466,7 +568,7 @@ void AShooterCharacter::UpdateWeaponHUD(int32 CurrentAmmo, int32 MagazineSize)
 
 FVector AShooterCharacter::GetWeaponTargetLocation()
 {
-	// trace ahead from the camera viewpoint
+	// 从相机视角向前发射射线
 	FHitResult OutHit;
 
 	const FVector Start = GetFirstPersonCameraComponent()->GetComponentLocation();
@@ -477,18 +579,18 @@ FVector AShooterCharacter::GetWeaponTargetLocation()
 
 	GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, QueryParams);
 
-	// return either the impact point or the trace end
+	// 返回命中点或检测终点
 	return OutHit.bBlockingHit ? OutHit.ImpactPoint : OutHit.TraceEnd;
 }
 
 void AShooterCharacter::AddWeaponClass(const TSubclassOf<AShooterWeapon>& WeaponClass)
 {
-	// do we already own this weapon?
+	// 是否已经拥有这把武器？
 	AShooterWeapon* OwnedWeapon = FindWeaponOfType(WeaponClass);
 
 	if (!OwnedWeapon)
 	{
-		// spawn the new weapon
+		// 生成新武器
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.Owner = this;
 		SpawnParams.Instigator = this;
@@ -499,16 +601,16 @@ void AShooterCharacter::AddWeaponClass(const TSubclassOf<AShooterWeapon>& Weapon
 
 		if (AddedWeapon)
 		{
-			// add the weapon to the owned list
+			// 将武器添加到拥有列表
 			OwnedWeapons.Add(AddedWeapon);
 
-			// if we have an existing weapon, deactivate it
+			// 如果已有武器，则停用它
 			if (CurrentWeapon)
 			{
 				CurrentWeapon->DeactivateWeapon();
 			}
 
-			// switch to the new weapon
+			// 切换到新武器
 			CurrentWeapon = AddedWeapon;
 			CurrentWeapon->ActivateWeapon();
 		}
@@ -517,27 +619,27 @@ void AShooterCharacter::AddWeaponClass(const TSubclassOf<AShooterWeapon>& Weapon
 
 void AShooterCharacter::OnWeaponActivated(AShooterWeapon* Weapon)
 {
-	// update the bullet counter
+	// 更新子弹计数器
 	OnBulletCountUpdated.Broadcast(Weapon->GetMagazineSize(), Weapon->GetBulletCount());
 
-	// set the character mesh AnimInstances
+	// 设置角色网格的 AnimInstance
 	GetFirstPersonMesh()->SetAnimInstanceClass(Weapon->GetFirstPersonAnimInstanceClass());
 	GetMesh()->SetAnimInstanceClass(Weapon->GetThirdPersonAnimInstanceClass());
 }
 
 void AShooterCharacter::OnWeaponDeactivated(AShooterWeapon* Weapon)
 {
-	// unused
+	// 未使用
 }
 
 void AShooterCharacter::OnSemiWeaponRefire()
 {
-	// unused
+	// 未使用
 }
 
 AShooterWeapon* AShooterCharacter::FindWeaponOfType(TSubclassOf<AShooterWeapon> WeaponClass) const
 {
-	// check each owned weapon
+	// 检查每把拥有的武器
 	for (AShooterWeapon* Weapon : OwnedWeapons)
 	{
 		if (Weapon->IsA(WeaponClass))
@@ -546,57 +648,59 @@ AShooterWeapon* AShooterCharacter::FindWeaponOfType(TSubclassOf<AShooterWeapon> 
 		}
 	}
 
-	// weapon not found
+	// 未找到武器
 	return nullptr;
 
 }
 
 void AShooterCharacter::Die()
 {
-	// only the server kills the character
+	// 只有服务器能击杀角色
 	if (!HasAuthority())
 	{
 		return;
 	}
 
-	// deactivate the weapon and clear buffs
+	// 停用武器并清除增益
 	if (IsValid(CurrentWeapon))
 	{
 		CurrentWeapon->DeactivateWeapon();
 		CurrentWeapon->SetDamageMultiplier(1.0f);
 	}
 
-	// clear active buff timers
+	// 清除激活中的增益计时器
 	GetWorld()->GetTimerManager().ClearTimer(DamageBoostTimer);
 	GetWorld()->GetTimerManager().ClearTimer(ScoreBoostTimer);
+	GetWorld()->GetTimerManager().ClearTimer(RecoilRecoveryTimer);
+	GetWorld()->GetTimerManager().ClearTimer(RecoilSettleTimer);
 	bHasDamageBoost = false;
 	bHasScoreBoost = false;
 
 	if (AShooterGameMode* GM = Cast<AShooterGameMode>(GetWorld()->GetAuthGameMode()))
 	{
-		// grant kill score + rewards to the killer (AddKillScore handles both)
+		// 向击杀者发放击杀分数和奖励（AddKillScore 同时处理两者）
 		GM->AddKillScore(LastDamageInstigator);
 
-		// halve the dead player's score
+		// 将死亡玩家的分数减半
 		GM->OnPlayerDeath(GetController());
 	}
 
-	// grant the death tag to the character
+	// 为角色添加死亡标签
 	Tags.Add(DeathTag);
 
-	// stop character movement
+	// 停止角色移动
 	GetCharacterMovement()->StopMovementImmediately();
 
-	// disable controls
+	// 禁用输入控制
 	DisableInput(nullptr);
 
-	// reset the bullet counter UI
+	// 重置子弹计数器 UI
 	OnBulletCountUpdated.Broadcast(0, 0);
 
-	// call the BP handler
+	// 调用蓝图处理器
 	Multicast_OnDeath();
 
-	// schedule character respawn
+	// 安排角色重生
 	GetWorld()->GetTimerManager().SetTimer(RespawnTimer, this, &AShooterCharacter::OnRespawn, RespawnTime, false);
 }
 
@@ -607,17 +711,17 @@ void AShooterCharacter::Multicast_OnDeath_Implementation()
 
 void AShooterCharacter::OnRespawn()
 {
-	// destroy the character to force the PC to respawn
+	// 销毁角色以强制玩家控制器重生
 	Destroy();
 }
 
 bool AShooterCharacter::IsDead() const
 {
-	// the character is dead if their current HP drops to zero
+	// 当角色当前 HP 降为零时即视为死亡
 	return CurrentHP <= 0.0f;
 }
 
-// ---- Buff System ----
+// ---- 增益系统 ----
 
 void AShooterCharacter::GrantKillRewards()
 {
@@ -626,7 +730,7 @@ void AShooterCharacter::GrantKillRewards()
 		return;
 	}
 
-	// Add one reserve magazine to every owned weapon
+	// 为每把拥有的武器增加一个备用弹匣
 	for (AShooterWeapon* Weapon : OwnedWeapons)
 	{
 		if (Weapon)
@@ -637,7 +741,7 @@ void AShooterCharacter::GrantKillRewards()
 
 	ShowBuffMessage(TEXT("Kill Reward: +1 Magazine"), FColor::Green);
 
-	// Roll for health restore
+	// 掷骰判定是否恢复生命
 	if (FMath::FRand() < HealthRestoreChance)
 	{
 		const float PrevHP = CurrentHP;
@@ -649,13 +753,13 @@ void AShooterCharacter::GrantKillRewards()
 		}
 	}
 
-	// Roll for damage boost
+	// 掷骰判定是否触发伤害增益
 	if (!bHasDamageBoost && FMath::FRand() < DamageBoostChance)
 	{
 		ActivateDamageBoost();
 	}
 
-	// Roll for score boost
+	// 掷骰判定是否触发分数增益
 	if (!bHasScoreBoost && FMath::FRand() < ScoreBoostChance)
 	{
 		ActivateScoreBoost();

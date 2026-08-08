@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "BuffMessageUI.h"
 #include "Blueprint/WidgetTree.h"
@@ -11,7 +11,7 @@ void UBuffMessageUI::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Auto-find the first TextBlock from user's blueprint (any name works)
+	// 自动从用户蓝图查找第一个 TextBlock（任意名称均可）
 	if (WidgetTree)
 	{
 		WidgetTree->ForEachWidget([this](UWidget* Widget)
@@ -30,7 +30,7 @@ void UBuffMessageUI::Show(const FString& Message, FColor Color)
 {
 	if (MessageText)
 	{
-		// Append new message on top, keep previous ones below
+		// 将新消息追加到顶部，保留旧消息在下方
 		const FText Existing = MessageText->GetText();
 		const FText NewLine = FText::FromString(Message);
 		if (Existing.IsEmpty())
@@ -45,7 +45,7 @@ void UBuffMessageUI::Show(const FString& Message, FColor Color)
 	}
 	SetVisibility(ESlateVisibility::Visible);
 
-	// Reset timer: hide 3s after the LAST buff message
+	// 重置计时器：在最后一条增益消息后 3 秒隐藏
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(HideTimer);

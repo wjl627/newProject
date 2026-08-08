@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -14,9 +14,9 @@ class UBuffMessageUI;
 enum class EMatchState : uint8;
 
 /**
- *  Simple PlayerController for a first person shooter game
- *  Manages input mappings
- *  Respawns the player pawn when it's destroyed
+ *  第一人称射击游戏的简单 PlayerController
+ *  管理输入映射
+ *  当玩家 Pawn 被销毁时重生它
  */
 UCLASS(abstract, config="Game")
 class NEWPROJECT_API AShooterPlayerController : public APlayerController
@@ -25,114 +25,114 @@ class NEWPROJECT_API AShooterPlayerController : public APlayerController
 	
 protected:
 
-	/** Input mapping contexts for this player */
+	/** 该玩家的输入映射上下文 */
 	UPROPERTY(EditAnywhere, Category="Input|Input Mappings")
 	TArray<UInputMappingContext*> DefaultMappingContexts;
 
-	/** Input Mapping Contexts */
+	/** 输入映射上下文 */
 	UPROPERTY(EditAnywhere, Category="Input|Input Mappings")
 	TArray<UInputMappingContext*> MobileExcludedMappingContexts;
 
-	/** Mobile controls widget to spawn */
+	/** 要生成的移动端控制小部件 */
 	UPROPERTY(EditAnywhere, Category="Input|Touch Controls")
 	TSubclassOf<UUserWidget> MobileControlsWidgetClass;
 
-	/** Pointer to the mobile controls widget */
+	/** 指向移动端控制小部件的指针 */
 	UPROPERTY()
 	TObjectPtr<UUserWidget> MobileControlsWidget;
 
-	/** If true, the player will use UMG touch controls even if not playing on mobile platforms */
+	/** 如果为 true，即使不在移动平台上游玩，玩家也会使用 UMG 触控 */
 	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
 	bool bForceTouchControls = false;
 
-	/** Character class to respawn when the possessed pawn is destroyed */
+	/** 当被控制的 Pawn 被销毁时要重生的角色类 */
 	UPROPERTY(EditAnywhere, Category="Shooter|Respawn")
 	TSubclassOf<AShooterCharacter> CharacterClass;
 
-	/** Type of bullet counter UI widget to spawn */
+	/** 要生成的子弹计数器 UI 小部件类型 */
 	UPROPERTY(EditAnywhere, Category="Shooter|UI")
 	TSubclassOf<UShooterBulletCounterUI> BulletCounterUIClass;
 
-	/** Tag to grant the possessed pawn to flag it as the player */
+	/** 添加到被控制 Pawn 上以标记为玩家的标签 */
 	UPROPERTY(EditAnywhere, Category="Shooter|Player")
 	FName PlayerPawnTag = FName("Player");
 
-	/** Type of scoreboard UI widget to spawn */
+	/** 要生成的记分板 UI 小部件类型 */
 	UPROPERTY(EditAnywhere, Category="Shooter|UI")
 	TSubclassOf<UShooterUI> ScoreboardUIClass;
 
-	/** Pointer to the bullet counter UI widget */
+	/** 指向子弹计数器 UI 小部件的指针 */
 	UPROPERTY()
 	TObjectPtr<UShooterBulletCounterUI> BulletCounterUI;
 
-	/** Pointer to the scoreboard UI widget */
+	/** 指向记分板 UI 小部件的指针 */
 	UPROPERTY()
 	TObjectPtr<UShooterUI> ScoreboardUI;
 
-	/** Whether the match has started (blocks UI updates during lobby) */
+	/** 比赛是否已开始（大厅期间阻止 UI 更新） */
 	bool bMatchStarted = false;
 
 
-	/** Buff message widget class (blueprint subclass) */
+	/** 增益消息小部件类（蓝图子类） */
 	UPROPERTY(EditAnywhere, Category="Shooter|UI")
 	TSubclassOf<UBuffMessageUI> BuffMessageUIClass;
 
-	/** Widget for showing buff notification messages */
+	/** 用于显示增益通知消息的小部件 */
 	UPROPERTY()
 	TObjectPtr<UBuffMessageUI> BuffMessageWidget;
 
-	/** Main menu widget class (host / join session) */
+	/** 主菜单小部件类（创建/加入会话） */
 	UPROPERTY(EditAnywhere, Category="Shooter|UI")
 	TSubclassOf<UUserWidget> MainMenuWidgetClass;
 
-	/** Lobby widget class (player list + start button) */
+	/** 大厅小部件类（玩家列表 + 开始按钮） */
 	UPROPERTY(EditAnywhere, Category="Shooter|UI")
 	TSubclassOf<UUserWidget> LobbyWidgetClass;
 
-	/** Pointer to the main menu widget */
+	/** 指向主菜单小部件的指针 */
 	UPROPERTY()
 	TObjectPtr<UUserWidget> MainMenuWidget;
 
-	/** Pointer to the lobby widget */
+	/** 指向大厅小部件的指针 */
 	UPROPERTY()
 	TObjectPtr<UUserWidget> LobbyWidget;
 
 protected:
 
-	/** Gameplay Initialization */
+	/** 游戏逻辑初始化 */
 	virtual void BeginPlay() override;
 
-	/** Initialize input bindings */
+	/** 初始化输入绑定 */
 	virtual void SetupInputComponent() override;
 
-	/** Pawn initialization (authority / listen-server host) */
+	/** Pawn 初始化（权威服务器 / 监听服务器主机） */
 	virtual void OnPossess(APawn* InPawn) override;
 
-	/** Pawn initialization on the owning client (dedicated client) */
+	/** 拥有该 Pawn 的客户端上的 Pawn 初始化（专用客户端） */
 	virtual void AcknowledgePossession(APawn* P) override;
 
-	/** Binds HUD delegates for the local player's shooter character */
+	/** 为本地玩家的射击角色绑定 HUD 委托 */
 	void SetupShooterCharacterUI(AShooterCharacter* ShooterCharacter);
 
-	/** Called if the possessed pawn is destroyed */
+	/** 当被控制的 Pawn 被销毁时调用 */
 	UFUNCTION()
 	void OnPawnDestroyed(AActor* DestroyedActor);
 
-	/** Called when the bullet count on the possessed pawn is updated */
+	/** 当被控制 Pawn 上的子弹数量更新时调用 */
 	UFUNCTION()
 	void OnBulletCountUpdated(int32 MagazineSize, int32 Bullets);
 
-	/** Called when the possessed pawn is damaged */
+	/** 当被控制的 Pawn 受到伤害时调用 */
 	UFUNCTION()
 	void OnPawnDamaged(float LifePercent);
 
-	/** Returns true if the player should use UMG touch controls */
+	/** 如果玩家应使用 UMG 触控则返回 true */
 	bool ShouldUseTouchControls() const;
 
-	/** Remove all Enhanced Input mapping contexts (blocks game input) */
+	/** 移除所有增强输入映射上下文（屏蔽游戏输入） */
 	void BlockAllGameInput();
 
-	/** Re-add Enhanced Input mapping contexts (enables game input) */
+	/** 重新添加增强输入映射上下文（启用游戏输入） */
 	void EnableGameInput();
 
 public:
@@ -140,33 +140,33 @@ public:
 	void ShowMainMenu();
 	void ShowLobby();
 
-	/** Client RPC to update the player's score on this client */
+	/** 在该客户端上更新玩家分数的客户端 RPC */
 	UFUNCTION(Client, Reliable)
 	void Client_UpdatePlayerScore(int32 Score);
 
-	/** Client RPC to update a team's score on this client */
+	/** 在该客户端上更新队伍分数的客户端 RPC */
 	UFUNCTION(Client, Reliable)
 	void Client_UpdateTeamScore(uint8 TeamByte, int32 Score);
 
-	/** Client RPC to show a buff notification message */
+	/** 显示增益通知消息的客户端 RPC */
 	UFUNCTION(Client, Reliable)
 	void Client_ShowBuffMessage(const FString& Message, FColor Color);
 
-	/** Client RPC to update the remaining match time */
+	/** 更新剩余比赛时间的客户端 RPC */
 	UFUNCTION(Client, Reliable)
 	void Client_UpdateMatchTime(int32 RemainingSeconds);
 
-	/** Client RPC to show the match ranking (same for all players) */
+	/** 显示比赛排名的客户端 RPC（对所有玩家相同） */
 	UFUNCTION(Client, Reliable)
 	void Client_ShowMatchRanking(const FString& RankingText);
 
-	/** Called by GameState OnRep when match state changes (runs on each client) */
+	/** 比赛状态变化时由 GameState 的 OnRep 调用（在每个客户端运行） */
 	void OnMatchStateChanged(EMatchState NewState);
 
-	/** Server RPC: host requests to start the match */
+	/** 服务器 RPC：房主请求开始比赛 */
 	UFUNCTION(Server, Reliable)
 	void Server_StartMatch();
 
-	/** Called when the host presses Enter in lobby */
+	/** 当房主在大厅按下 Enter 时调用 */
 	void OnLobbyStartPressed();
 };

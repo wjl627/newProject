@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "MatchResultOverlay.h"
 #include "Blueprint/WidgetTree.h"
@@ -16,7 +16,7 @@ void UMatchResultOverlay::NativeConstruct()
 		return;
 	}
 
-	// Root canvas for layering
+	// 用于分层的根画布
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass());
 	if (!Canvas)
 	{
@@ -24,7 +24,7 @@ void UMatchResultOverlay::NativeConstruct()
 	}
 	WidgetTree->RootWidget = Canvas;
 
-	// Dark background overlay
+	// 深色背景遮罩
 	UBorder* Background = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 	if (Background)
 	{
@@ -38,7 +38,7 @@ void UMatchResultOverlay::NativeConstruct()
 		}
 	}
 
-	// Ranking text
+	// 排名文本
 	ResultTextBlock = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ResultLabel"));
 	if (ResultTextBlock)
 	{

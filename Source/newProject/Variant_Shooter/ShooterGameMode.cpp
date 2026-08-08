@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "Variant_Shooter/ShooterGameMode.h"
@@ -21,7 +21,7 @@ void AShooterGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Enter lobby state — GameState replicates to all clients
+	// 进入大厅状态——GameState 会复制到所有客户端
 	if (AShooterGameState* GS = GetGameState<AShooterGameState>())
 	{
 		GS->SetMatchState(EMatchState::Lobby);
@@ -38,7 +38,7 @@ void AShooterGameMode::StartMatch()
 
 	GS->SetMatchState(EMatchState::InProgress);
 
-	// Start periodic enemy spawn checks
+	// 启动周期性敌人生成检查
 	GetWorld()->GetTimerManager().SetTimer(
 		SpawnTimer,
 		this,
@@ -47,7 +47,7 @@ void AShooterGameMode::StartMatch()
 		true
 	);
 
-	// Start match countdown
+	// 开始比赛倒计时
 	RemainingTime = MatchDuration;
 	GetWorld()->GetTimerManager().SetTimer(
 		MatchTimer,
@@ -71,7 +71,7 @@ void AShooterGameMode::IncrementTeamScore(uint8 TeamByte)
 	++Score;
 	TeamScores.Add(TeamByte, Score);
 
-	// broadcast team score to all player controllers
+	// 向所有玩家控制器广播队伍分数
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
 		if (AShooterPlayerController* PC = Cast<AShooterPlayerController>(It->Get()))
@@ -88,7 +88,7 @@ void AShooterGameMode::AddKillScore(AController* Killer)
 		return;
 	}
 
-	// Grant kill rewards (ammo + random buffs) to the killer
+	// 向击杀者发放击杀奖励（弹药 + 随机增益）
 	if (AShooterCharacter* KillerChar = Cast<AShooterCharacter>(Killer->GetPawn()))
 	{
 		KillerChar->GrantKillRewards();
@@ -129,7 +129,7 @@ void AShooterGameMode::CheckAndSpawnEnemies()
 		return;
 	}
 
-	// Count alive NPCs
+	// 统计存活 NPC 数量
 	int32 AliveCount = 0;
 	TArray<AActor*> AllNPCs;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AShooterNPC::StaticClass(), AllNPCs);
@@ -149,7 +149,7 @@ void AShooterGameMode::CheckAndSpawnEnemies()
 		return;
 	}
 
-	// Find spawn points
+	// 查找生成点
 	TArray<AActor*> SpawnPoints;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AShooterNPCSpawner::StaticClass(), SpawnPoints);
 
@@ -158,7 +158,7 @@ void AShooterGameMode::CheckAndSpawnEnemies()
 		return;
 	}
 
-	// Spawn one enemy at a random spawn point
+	// 在随机生成点生成一个敌人
 	const AShooterNPCSpawner* Spawner = Cast<AShooterNPCSpawner>(SpawnPoints[FMath::RandRange(0, SpawnPoints.Num() - 1)]);
 	const FTransform SpawnTransform = Spawner->GetSpawnTransform();
 
@@ -186,13 +186,13 @@ void AShooterGameMode::TickMatchTime()
 
 	RemainingTime = FMath::Max(0.0f, RemainingTime - 1.0f);
 
-	// Update remaining time on GameState (replicates to all clients)
+	// 在 GameState 上更新剩余时间（复制到所有客户端）
 	if (AShooterGameState* GS = GetGameState<AShooterGameState>())
 	{
 		GS->SetRemainingTime(RemainingTime);
 	}
 
-	// Send remaining time to all players (Client RPC for HUD display)
+	// 向所有玩家发送剩余时间（用于 HUD 显示的客户端 RPC）
 	const int32 RemainingSeconds = FMath::CeilToInt(RemainingTime);
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
@@ -215,7 +215,7 @@ void AShooterGameMode::EndMatch()
 {
 	UE_LOG(LognewProject, Warning, TEXT("=== EndMatch! PlayerScores has %d entries ==="), PlayerScores.Num());
 
-	// Collect and sort player scores
+	// 收集并排序玩家分数
 	struct FPlayerEntry
 	{
 		AController* Controller = nullptr;
@@ -233,7 +233,7 @@ void AShooterGameMode::EndMatch()
 
 	Entries.Sort([](const FPlayerEntry& A, const FPlayerEntry& B) { return A.Score > B.Score; });
 
-	// Build ranking text for display (top 3)
+	// 生成用于显示的排名文本（前三名）
 	FString RankingText = TEXT("=== MATCH RESULTS ===\n\n");
 	const TCHAR* PlaceNames[] = {TEXT("1st"), TEXT("2nd"), TEXT("3rd")};
 
@@ -249,7 +249,7 @@ void AShooterGameMode::EndMatch()
 
 	UE_LOG(LognewProject, Warning, TEXT("Ranking:\n%s"), *RankingText);
 
-	// Send ranking BEFORE SetMatchState so widget updates in game mode
+	// 在 SetMatchState 之前发送排名，以便小部件在游戏模式下更新
 	int32 PCCount = 0;
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
@@ -261,14 +261,14 @@ void AShooterGameMode::EndMatch()
 	}
 	UE_LOG(LognewProject, Warning, TEXT("EndMatch: Sent ranking to %d player controllers"), PCCount);
 
-	// Switch to Ended state AFTER ranking RPCs (triggers input blocking on clients)
+	// 在排名 RPC 之后切换到 Ended 状态（触发客户端的输入屏蔽）
 	AShooterGameState* GS = GetGameState<AShooterGameState>();
 	if (GS)
 	{
 		GS->SetMatchState(EMatchState::Ended);
 	}
 
-	// Cleanup
+	// 清理
 	TArray<AActor*> AllNPCs;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AShooterNPC::StaticClass(), AllNPCs);
 	for (AActor* Actor : AllNPCs) { Actor->Destroy(); }

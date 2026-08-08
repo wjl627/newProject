@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -7,8 +7,8 @@
 #include "BTTask_FindPatrolPoint.generated.h"
 
 /**
- *  Finds a random reachable point on the NavMesh within the controller's PatrolRadius
- *  and stores it in the Blackboard PatrolLocation key.
+ *  在控制器 PatrolRadius 范围内的 NavMesh 上查找一个随机可达点，
+ *  并将其存储到黑板（Blackboard）的 PatrolLocation 键中。
  */
 UCLASS()
 class NEWPROJECT_API UBTTask_FindPatrolPoint : public UBTTaskNode
@@ -21,7 +21,7 @@ public:
 protected:
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 
-	/** Blackboard key to store the patrol destination */
+	/** 用于存储巡逻目的地的黑板键 */
 	UPROPERTY(EditAnywhere, Category = "Blackboard")
 	FName PatrolLocationKey = TEXT("PatrolLocation");
 };

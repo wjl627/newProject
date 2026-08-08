@@ -1,11 +1,14 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Variant_Shooter/AI/ShooterAIController.h"
 #include "ShooterNPC.h"
 #include "Perception/AIPerceptionComponent.h"
+#include "Perception/AISenseConfig_Sight.h"
+#include "Perception/AISense_Sight.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Character.h"
 #include "BehaviorTree/BehaviorTree.h"
+#include "Engine/World.h"
 
 AShooterAIController::AShooterAIController()
 {
@@ -27,6 +30,20 @@ void AShooterAIController::OnPossess(APawn* InPawn)
 		PossessedNPC->Tags.Add(TeamTag);
 		PossessedNPC->OnPawnDeath.AddDynamic(this, &AShooterAIController::OnPawnDeath);
 
+		// 应用运行时视觉配置，让敌人能够看得很远以发动攻击，
+		// 并且不会跟丢靠近/侧面的目标。
+		if (UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent())
+		{
+			if (UAISenseConfig_Sight* SightConfig = PerceptionComp->GetSenseConfig<UAISenseConfig_Sight>())
+			{
+				SightConfig->SightRadius = FMath::Max(PerceptionSightRadius, AttackRange);
+				SightConfig->LoseSightRadius = FMath::Max(PerceptionLoseSightRadius, PerceptionSightRadius);
+				SightConfig->PeripheralVisionAngleDegrees = PerceptionSightAngle;
+				SightConfig->SetMaxAge(PerceptionMaxAge);
+				PerceptionComp->RequestStimuliListenerUpdate();
+			}
+		}
+
 		if (bUseBehaviorTree && BehaviorTreeAsset)
 		{
 			RunBehaviorTree(BehaviorTreeAsset);
@@ -40,7 +57,7 @@ void AShooterAIController::Tick(float DeltaTime)
 }
 
 // -----------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // -----------------------------------------------------------------------------
 
 bool AShooterAIController::HasLineOfSightToTarget() const
@@ -71,8 +88,36 @@ bool AShooterAIController::HasLineOfSightToTarget() const
 	return !OutHit.bBlockingHit;
 }
 
+void AShooterAIController::UpdateLastKnownTargetLocation(const FVector& Location)
+{
+	LastKnownTargetLocation = Location;
+	if (UWorld* World = GetWorld())
+	{
+		LastTargetSeenTime = World->GetTimeSeconds();
+	}
+}
+
+bool AShooterAIController::GetLastKnownTargetLocation(FVector& OutLocation, float MaxAge) const
+{
+	if (GetTimeSinceLastSeenTarget() <= MaxAge)
+	{
+		OutLocation = LastKnownTargetLocation;
+		return true;
+	}
+	return false;
+}
+
+float AShooterAIController::GetTimeSinceLastSeenTarget() const
+{
+	if (const UWorld* World = GetWorld())
+	{
+		return World->GetTimeSeconds() - LastTargetSeenTime;
+	}
+	return MAX_FLT;
+}
+
 // -----------------------------------------------------------------------------
-// Perception
+// 感知
 // -----------------------------------------------------------------------------
 
 void AShooterAIController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
@@ -96,7 +141,7 @@ void AShooterAIController::OnPerceptionForgotten(AActor* Actor)
 }
 
 // -----------------------------------------------------------------------------
-// Death
+// 死亡
 // -----------------------------------------------------------------------------
 
 void AShooterAIController::OnPawnDeath()
@@ -115,7 +160,7 @@ void AShooterAIController::OnPawnDeath()
 }
 
 // -----------------------------------------------------------------------------
-// State Machine — deprecated, kept for reference
+// 状态机——已弃用，仅作参考保留
 // -----------------------------------------------------------------------------
 #if 0
 
@@ -280,4 +325,4 @@ FVector AShooterAIController::GetRandomPatrolPoint() const
 	return Origin + RandomOffset;
 }
 
-#endif // State Machine
+#endif // 状态机

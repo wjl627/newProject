@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -23,51 +23,51 @@ class NEWPROJECT_API AShooterNPCSpawner : public AActor
 
 protected:
 
-	/** Type of NPC to spawn */
+	/** 要生成的 NPC 类型 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="NPC Spawner")
 	TSubclassOf<AShooterNPC> NPCClass;
 
-	/** Time to wait before spawning the first NPC on game start */
+	/** 游戏开始时生成第一个 NPC 前的等待时间 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="NPC Spawner", meta = (ClampMin = 0, ClampMax = 10))
 	float InitialSpawnDelay = 5.0f;
 
-	/** Number of NPCs to spawn */
+	/** 要生成的 NPC 数量 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="NPC Spawner", meta = (ClampMin = 0, ClampMax = 100))
 	int32 SpawnCount = 1;
 
-	/** Time to wait before spawning the next NPC after the current one dies */
+	/** 当前 NPC 死亡后，生成下一个 NPC 前的等待时间 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="NPC Spawner", meta = (ClampMin = 0, ClampMax = 10))
 	float RespawnDelay = 5.0f;
 
-	/** If false, the spawner only acts as a spawn point for the GameMode */
+	/** 如果为 false，生成器仅作为 GameMode 的生成点 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="NPC Spawner")
 	bool bAutoSpawn = false;
 
-	/** Timer to spawn NPCs after a delay */
+	/** 延迟生成 NPC 的计时器 */
 	FTimerHandle SpawnTimer;
 
 public:
 
-	/** Constructor */
+	/** 构造函数 */
 	AShooterNPCSpawner();
 
-	/** Returns the world-space spawn transform */
+	/** 返回世界空间中的生成变换 */
 	FTransform GetSpawnTransform() const;
 
 public:
 
-	/** Initialization */
+	/** 初始化 */
 	virtual void BeginPlay() override;
 
-	/** Cleanup */
+	/** 清理 */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 
 protected:
 
-	/** Spawn an NPC and subscribe to its death event */
+	/** 生成一个 NPC 并订阅其死亡事件 */
 	void SpawnNPC();
 
-	/** Called when the spawned NPC has died */
+	/** 当生成的 NPC 死亡时调用 */
 	UFUNCTION()
 	void OnNPCDied();
 

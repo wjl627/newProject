@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "Variant_Shooter/AI/ShooterNPC.h"
@@ -17,7 +17,7 @@ void AShooterNPC::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// spawn the weapon (server only)
+	// 生成武器（仅服务器）
 	if (!HasAuthority())
 	{
 		return;
@@ -30,7 +30,7 @@ void AShooterNPC::BeginPlay()
 
 	Weapon = GetWorld()->SpawnActor<AShooterWeapon>(WeaponClass, GetActorTransform(), SpawnParams);
 
-	// NPCs get unlimited reserve ammo
+	// NPC 拥有无限备用弹药
 	if (Weapon)
 	{
 		Weapon->AddReserveMagazines(Weapon->GetMaxReserveMagazines());
@@ -41,7 +41,7 @@ void AShooterNPC::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 
-	// clear the death timer
+	// 清除死亡计时器
 	GetWorld()->GetTimerManager().ClearTimer(DeathTimer);
 }
 
@@ -58,37 +58,37 @@ void AShooterNPC::OnRep_bIsDead()
 {
 	if (bIsDead)
 	{
-		// enable ragdoll on the third person mesh
+		// 在第三人称网格上启用布娃娃物理
 		GetMesh()->SetCollisionProfileName(RagdollCollisionProfile);
 		GetMesh()->SetSimulatePhysics(true);
 		GetMesh()->SetPhysicsBlendWeight(1.0f);
 
-		// stop movement
+		// 停止移动
 		GetCharacterMovement()->StopMovementImmediately();
 	}
 }
 
 float AShooterNPC::TakeDamage(float Damage, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-	// only the server applies damage
+	// 只有服务器应用伤害
 	if (!HasAuthority())
 	{
 		return 0.0f;
 	}
 
-	// ignore if already dead
+	// 已经死亡则忽略
 	if (bIsDead)
 	{
 		return 0.0f;
 	}
 
-	// remember who damaged us for kill credit
+	// 记住伤害来源以便记录击杀
 	LastDamageInstigator = EventInstigator;
 
-	// Reduce HP
+	// 减少 HP
 	CurrentHP -= Damage;
 
-	// Have we depleted HP?
+	// HP 是否已耗尽？
 	if (CurrentHP <= 0.0f)
 	{
 		Die();
@@ -101,61 +101,61 @@ void AShooterNPC::AttachWeaponMeshes(AShooterWeapon* WeaponToAttach)
 {
 	const FAttachmentTransformRules AttachmentRule(EAttachmentRule::SnapToTarget, false);
 
-	// attach the weapon actor
+	// 挂接武器 Actor
 	WeaponToAttach->AttachToActor(this, AttachmentRule);
 
-	// attach the weapon meshes
+	// 挂接武器网格
 	WeaponToAttach->GetFirstPersonMesh()->AttachToComponent(GetFirstPersonMesh(), AttachmentRule, FirstPersonWeaponSocket);
 	WeaponToAttach->GetThirdPersonMesh()->AttachToComponent(GetMesh(), AttachmentRule, ThirdPersonWeaponSocket);
 }
 
 void AShooterNPC::PlayFiringMontage(UAnimMontage* Montage)
 {
-	// unused
+	// 未使用
 }
 
 void AShooterNPC::AddWeaponRecoil(float Recoil)
 {
-	// unused
+	// 未使用
 }
 
 void AShooterNPC::UpdateWeaponHUD(int32 CurrentAmmo, int32 MagazineSize)
 {
-	// unused
+	// 未使用
 }
 
 FVector AShooterNPC::GetWeaponTargetLocation()
 {
-	// start aiming from the camera location
+	// 从相机位置开始瞄准
 	const FVector AimSource = GetFirstPersonCameraComponent()->GetComponentLocation();
 
 	FVector AimDir, AimTarget = FVector::ZeroVector;
 
-	// do we have an aim target?
+	// 是否有瞄准目标？
 	if (IsValid(CurrentAimTarget) && !CurrentAimTarget->ActorHasTag(DeathTag))
 	{
-		// target the actor location
+		// 瞄准 Actor 的位置
 		AimTarget = CurrentAimTarget->GetActorLocation();
 
-		// apply a vertical offset to target head/feet
+		// 应用垂直偏移以瞄准头部/脚部
 		AimTarget.Z += FMath::RandRange(MinAimOffsetZ, MaxAimOffsetZ);
 
-		// get the aim direction and apply randomness in a cone
+		// 获取瞄准方向并在锥形范围内施加随机性
 		AimDir = (AimTarget - AimSource).GetSafeNormal();
 		AimDir = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(AimDir, AimVarianceHalfAngle);
 
 		
 	} else {
 
-		// no aim target, so just use the camera facing
+		// 没有瞄准目标，直接使用相机朝向
 		AimDir = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(GetFirstPersonCameraComponent()->GetForwardVector(), AimVarianceHalfAngle);
 
 	}
 
-	// calculate the unobstructed aim target location
+	// 计算无遮挡时的瞄准目标位置
 	AimTarget = AimSource + (AimDir * AimRange);
 
-	// run a visibility trace to see if there's obstructions
+	// 执行可见性检测以查看是否有遮挡
 	FHitResult OutHit;
 
 	FCollisionQueryParams QueryParams;
@@ -163,92 +163,92 @@ FVector AShooterNPC::GetWeaponTargetLocation()
 
 	GetWorld()->LineTraceSingleByChannel(OutHit, AimSource, AimTarget, ECC_Visibility, QueryParams);
 
-	// return either the impact point or the trace end
+	// 返回命中点或检测终点
 	return OutHit.bBlockingHit ? OutHit.ImpactPoint : OutHit.TraceEnd;
 }
 
 void AShooterNPC::AddWeaponClass(const TSubclassOf<AShooterWeapon>& InWeaponClass)
 {
-	// unused
+	// 未使用
 }
 
 void AShooterNPC::OnWeaponActivated(AShooterWeapon* InWeapon)
 {
-	// unused
+	// 未使用
 }
 
 void AShooterNPC::OnWeaponDeactivated(AShooterWeapon* InWeapon)
 {
-	// unused
+	// 未使用
 }
 
 void AShooterNPC::OnSemiWeaponRefire()
 {
-	// are we still shooting?
+	// 我们仍在射击吗？
 	if (bIsShooting)
 	{
-		// fire the weapon
+		// 开火
 		Weapon->StartFiring();
 	}
 }
 
 void AShooterNPC::PlayEquipMontage(UAnimMontage* Montage)
 {
-	// unused (NPCs don't play equip animations)
+	// 未使用（NPC 不播放装备动画）
 }
 
 void AShooterNPC::PlayUnequipMontage(UAnimMontage* Montage)
 {
-	// unused (NPCs don't play unequip animations)
+	// 未使用（NPC 不播放卸下武器动画）
 }
 
 void AShooterNPC::PlayReloadMontage(UAnimMontage* Montage)
 {
-	// unused (NPCs don't play reload animations)
+	// 未使用（NPC 不播放换弹动画）
 }
 
 void AShooterNPC::Die()
 {
-	// only the server kills this character
+	// 只有服务器能击杀此角色
 	if (!HasAuthority())
 	{
 		return;
 	}
 
-	// ignore if already dead
+	// 已经死亡则忽略
 	if (bIsDead)
 	{
 		return;
 	}
 
-	// raise the dead flag
+	// 设置死亡标记
 	bIsDead = true;
 
-	// grant the death tag to the character
+	// 为角色添加死亡标签
 	Tags.Add(DeathTag);
 
-	// call the delegate
+	// 调用委托
 	OnPawnDeath.Broadcast();
 
-	// award kill score to the player who killed us
+	// 向击杀我们的玩家发放击杀分数
 	if (AShooterGameMode* GM = Cast<AShooterGameMode>(GetWorld()->GetAuthGameMode()))
 	{
 		GM->AddKillScore(LastDamageInstigator);
 	}
 
-	// disable capsule collision
+	// 禁用胶囊体碰撞
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	// stop movement
+	// 停止移动
 	GetCharacterMovement()->StopMovementImmediately();
 	GetCharacterMovement()->StopActiveMovement();
 
-	// enable ragdoll physics on the third person mesh
+	// 在第三人称网格上启用布娃娃物理
 	GetMesh()->SetCollisionProfileName(RagdollCollisionProfile);
 	GetMesh()->SetSimulatePhysics(true);
 	GetMesh()->SetPhysicsBlendWeight(1.0f);
 
-	// schedule actor destruction
+	// 安排 Actor 销毁
 	GetWorld()->GetTimerManager().SetTimer(DeathTimer, this, &AShooterNPC::DeferredDestruction, DeferredDestructionTime, false);
 }
 
@@ -259,13 +259,13 @@ void AShooterNPC::DeferredDestruction()
 
 void AShooterNPC::StartShooting(AActor* ActorToShoot)
 {
-	// save the aim target
+	// 保存瞄准目标
 	CurrentAimTarget = ActorToShoot;
 
-	// raise the flag
+	// 设置标记
 	bIsShooting = true;
 
-	// signal the weapon
+	// 通知武器
 	Weapon->StartFiring();
 }
 

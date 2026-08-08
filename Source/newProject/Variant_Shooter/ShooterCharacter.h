@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -25,68 +25,68 @@ class NEWPROJECT_API AShooterCharacter : public AnewProjectCharacter, public ISh
 
 protected:
 
-	/** Fire weapon input action */
+	/** 开火输入操作 */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* FireAction;
 
-	/** Reload weapon input action */
+	/** 换弹输入操作 */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* ReloadAction;
 
-	/** Switch weapon input action */
+	/** 切换武器输入操作 */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* SwitchWeaponAction;
 
-	/** Name of the first person mesh weapon socket */
+	/** 第一人称网格的武器插槽名称 */
 	UPROPERTY(EditAnywhere, Category ="Weapons")
 	FName FirstPersonWeaponSocket = FName("HandGrip_R");
 
-	/** Name of the third person mesh weapon socket */
+	/** 第三人称网格的武器插槽名称 */
 	UPROPERTY(EditAnywhere, Category ="Weapons")
 	FName ThirdPersonWeaponSocket = FName("HandGrip_R");
 
-	/** Max distance to use for aim traces */
+	/** 瞄准射线使用的最大距离 */
 	UPROPERTY(EditAnywhere, Category ="Aim", meta = (ClampMin = 0, ClampMax = 100000, Units = "cm"))
 	float MaxAimDistance = 10000.0f;
 
-	/** Max HP this character can have */
+	/** 该角色可拥有的最大 HP */
 	UPROPERTY(EditAnywhere, Category="Health")
 	float MaxHP = 500.0f;
 
-	/** Current HP remaining to this character */
+	/** 该角色当前剩余 HP */
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentHP)
 	float CurrentHP = 0.0f;
 
-	/** Team ID for this character*/
+	/** 该角色的队伍 ID */
 	UPROPERTY(EditAnywhere, Category="Team")
 	uint8 TeamByte = 0;
 
-	/** Actor tag to grant this character when it dies */
+	/** 该角色死亡时添加的 Actor 标签 */
 	UPROPERTY(EditAnywhere, Category="Team")
 	FName DeathTag = FName("Dead");
 
-	/** Weapon classes the character starts with */
+	/** 角色初始拥有的武器类 */
 	UPROPERTY(EditAnywhere, Category="Weapons")
 	TArray<TSubclassOf<AShooterWeapon>> DefaultWeapons;
 
-	/** List of weapons picked up by the character */
+	/** 角色获得的武器列表 */
 	TArray<AShooterWeapon*> OwnedWeapons;
 
-	/** Weapon currently equipped and ready to shoot with */
+	/** 当前装备并可射击的武器 */
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentWeapon)
 	TObjectPtr<AShooterWeapon> CurrentWeapon;
 
-	/** Duration of the weapon switch animation */
+	/** 武器切换动画的持续时间 */
 	UPROPERTY(EditAnywhere, Category="Weapons", meta = (ClampMin = 0.0f, ClampMax = 2.0f, Units = "s"))
 	float WeaponSwitchDuration = 0.4f;
 
-	/** True while a weapon switch animation is playing */
+	/** 武器切换动画播放期间为 true */
 	bool bIsSwitchingWeapon = false;
 
-	/** Timer handle for completing weapon switch after animation */
+	/** 动画结束后完成武器切换的计时器句柄 */
 	FTimerHandle WeaponSwitchTimerHandle;
 
-	/** Index of the pending weapon to switch to */
+	/** 待切换武器的索引 */
 	int32 PendingWeaponIndex = 0;
 
 	UPROPERTY(EditAnywhere, Category ="Destruction", meta = (ClampMin = 0, ClampMax = 10, Units = "s"))
@@ -94,50 +94,98 @@ protected:
 
 	FTimerHandle RespawnTimer;
 
-	/** Timer for continuously sending aim updates to server during full-auto fire */
+	/** 全自动射击期间持续向服务器发送瞄准更新的计时器 */
 	FTimerHandle AimUpdateTimer;
 
-	// ---- Buff System ----
+	// ---- 后坐力 ----
 
-	/** Chance to restore health on kill */
+	/** 开火后相机回到原始瞄准位置的速度 */
+	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.1f, ClampMax = 60.0f, Units = "deg/s"))
+	float RecoilRecoverySpeed = 12.0f;
+
+	/** 开火时相机累计的最大俯仰冲击 */
+	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.1f, ClampMax = 45.0f, Units = "deg"))
+	float MaxRecoilPitch = 3.0f;
+
+	/** 开火时相机累计的最大偏航冲击 */
+	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.1f, ClampMax = 45.0f, Units = "deg"))
+	float MaxRecoilYaw = 1.5f;
+
+	/** 相机获得的水平冲击相对垂直冲击的比例 */
+	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.0f, ClampMax = 1.0f))
+	float RecoilYawRatio = 0.35f;
+
+	/** 如果为 true，在第一人称手臂上播放武器开火动画（可能导致枪口下沉/抖动） */
+	UPROPERTY(EditAnywhere, Category="Recoil")
+	bool bPlayFiringMontage = false;
+
+	/** 单次射击施加的最大俯仰冲击 */
+	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.0f, ClampMax = 10.0f, Units = "deg"))
+	float MaxRecoilPitchPerShot = 1.5f;
+
+	/** 最后一发子弹射出后，相机开始回到原始瞄准位置前的延迟 */
+	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.0f, ClampMax = 2.0f, Units = "s"))
+	float RecoilSettleDelay = 0.15f;
+
+	/** 当装备的武器未配置开火后坐力时使用的相机冲击 */
+	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.0f, ClampMax = 30.0f, Units = "deg"))
+	float DefaultWeaponRecoil = 1.2f;
+
+	/** 当前等待恢复的相机后坐力偏移 */
+	float CurrentRecoilPitch = 0.0f;
+	float CurrentRecoilYaw = 0.0f;
+
+	/** 让相机平滑回到射击前瞄准位置的计时器 */
+	FTimerHandle RecoilRecoveryTimer;
+	FTimerHandle RecoilSettleTimer;
+
+	/** 停止射击后启动恢复计时器 */
+	void StartRecoilRecovery();
+
+	/** 让相机逐步回到射击前瞄准位置 */
+	void UpdateRecoilRecovery();
+
+	// ---- 增益系统 ----
+
+	/** 击杀时恢复生命的概率 */
 	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 1))
 	float HealthRestoreChance = 0.3f;
 
-	/** Amount of health restored */
+	/** 恢复的生命值 */
 	UPROPERTY(EditAnywhere, Category="Buffs")
 	float HealthRestoreAmount = 50.0f;
 
-	/** Chance to get damage boost on kill */
+	/** 击杀时获得伤害增益的概率 */
 	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 1))
 	float DamageBoostChance = 0.3f;
 
-	/** Damage multiplier while boosted */
+	/** 增益期间的伤害倍率 */
 	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 1, ClampMax = 10))
 	float DamageBoostMultiplier = 2.0f;
 
-	/** Duration of damage boost */
+	/** 伤害增益持续时间 */
 	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 60))
 	float DamageBoostDuration = 10.0f;
 
-	/** Chance to get score boost on kill */
+	/** 击杀时获得分数增益的概率 */
 	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 1))
 	float ScoreBoostChance = 0.2f;
 
-	/** Score multiplier while boosted */
+	/** 增益期间的分数倍率 */
 	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 1, ClampMax = 10))
 	float ScoreBoostMultiplier = 2.0f;
 
-	/** Duration of score boost */
+	/** 分数增益持续时间 */
 	UPROPERTY(EditAnywhere, Category="Buffs", meta = (ClampMin = 0, ClampMax = 60))
 	float ScoreBoostDuration = 15.0f;
 
-	/** Controller that last damaged this character */
+	/** 最后伤害该角色的控制器 */
 	AController* LastDamageInstigator = nullptr;
 
-	/** Whether damage boost is active */
+	/** 伤害增益是否生效 */
 	bool bHasDamageBoost = false;
 
-	/** Whether score boost is active */
+	/** 分数增益是否生效 */
 	bool bHasScoreBoost = false;
 
 	FTimerHandle DamageBoostTimer;
@@ -148,107 +196,107 @@ protected:
 	void ActivateScoreBoost();
 	void DeactivateScoreBoost();
 
-	/** Sends a buff notification to the owning client only */
+	/** 仅向拥有该角色的客户端发送增益通知 */
 	void ShowBuffMessage(const FString& Message, FColor Color);
 
 public:
 
-	/** Bullet count updated delegate */
+	/** 子弹数量更新委托 */
 	FBulletCountUpdatedDelegate OnBulletCountUpdated;
 
-	/** Damaged delegate */
+	/** 受击委托 */
 	FDamagedDelegate OnDamaged;
 
 public:
 
-	/** Constructor */
+	/** 构造函数 */
 	AShooterCharacter();
 
 protected:
 
-	/** Property replication */
+	/** 属性复制 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** Called when CurrentHP replicates to clients */
+	/** 当 CurrentHP 复制到客户端时调用 */
 	UFUNCTION()
 	void OnRep_CurrentHP();
 
-	/** Called when CurrentWeapon replicates to clients */
+	/** 当 CurrentWeapon 复制到客户端时调用 */
 	UFUNCTION()
 	void OnRep_CurrentWeapon();
 
-	/** Gameplay initialization */
+	/** 游戏逻辑初始化 */
 	virtual void BeginPlay() override;
 
-	/** Gameplay cleanup */
+	/** 游戏逻辑清理 */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 
-	/** Set up input action bindings */
+	/** 设置输入操作绑定 */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
 public:
 
-	/** Handle incoming damage */
+	/** 处理受到的伤害 */
 	virtual float TakeDamage(float Damage, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
 public:
 
-	/** Handles aim inputs from either controls or UI interfaces */
+	/** 处理来自控制或 UI 界面的瞄准输入 */
 	virtual void DoAim(float Yaw, float Pitch) override;
 
-	/** Handles move inputs from either controls or UI interfaces */
+	/** 处理来自控制或 UI 界面的移动输入 */
 	virtual void DoMove(float Right, float Forward)  override;
 
-	/** Handles jump start inputs from either controls or UI interfaces */
+	/** 处理来自控制或 UI 界面的跳跃开始输入 */
 	virtual void DoJumpStart()  override;
 
-	/** Handles jump end inputs from either controls or UI interfaces */
+	/** 处理来自控制或 UI 界面的跳跃结束输入 */
 	virtual void DoJumpEnd()  override;
 
-	/** Handles start firing input */
+	/** 处理开始开火输入 */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoStartFiring();
 
-	/** Handles stop firing input */
+	/** 处理停止开火输入 */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoStopFiring();
 
-	/** Called by timer to stream aim target updates to server */
+	/** 由计时器调用，向服务器持续发送瞄准目标更新 */
 	void StreamAimTarget();
 
-	/** Server RPC for start firing */
+	/** 开始开火的服务器 RPC */
 	UFUNCTION(Server, Reliable)
 	void Server_StartFiring(FVector ClientAimTarget);
 
-	/** Server RPC for stop firing */
+	/** 停止开火的服务器 RPC */
 	UFUNCTION(Server, Reliable)
 	void Server_StopFiring();
 
-	/** Server RPC for updating aim target during full-auto fire */
+	/** 全自动射击期间更新瞄准目标的服务器 RPC */
 	UFUNCTION(Server, Unreliable)
 	void Server_UpdateAimTarget(FVector ClientAimTarget);
 
-	/** Handles switch weapon input */
+	/** 处理切换武器输入 */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoSwitchWeapon();
 
-	/** Server RPC for weapon switch */
+	/** 切换武器的服务器 RPC */
 	UFUNCTION(Server, Reliable)
 	void Server_SwitchWeapon();
 
-	/** Handles reload weapon input */
+	/** 处理换弹输入 */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoReload();
 
-	/** Server RPC for reload */
+	/** 换弹的服务器 RPC */
 	UFUNCTION(Server, Reliable)
 	void Server_Reload();
 
-	/** Multicast RPC for equip montage */
+	/** 播放装备动画的多播 RPC */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayEquipMontage(UAnimMontage* Montage);
 
-	/** Multicast RPC for unequip montage */
+	/** 播放卸下武器动画的多播 RPC */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayUnequipMontage(UAnimMontage* Montage);
 
@@ -273,46 +321,46 @@ public:
 
 protected:
 
-	/** Returns true if the character already owns a weapon of the given class */
+	/** 如果角色已拥有指定类的武器则返回 true */
 	AShooterWeapon* FindWeaponOfType(TSubclassOf<AShooterWeapon> WeaponClass) const;
 
-	/** Internal weapon switch logic (runs on server only) */
+	/** 内部武器切换逻辑（仅在服务器运行） */
 	void SwitchWeapon_Internal();
 
-	/** Swaps the actual weapon and ABP, then plays equip animation */
+	/** 切换实际武器和 ABP，然后播放装备动画 */
 	void PerformWeaponSwap();
 
-	/** Called after the equip animation to finalize the switch */
+	/** 装备动画结束后调用以完成切换 */
 	void FinishWeaponSwitch();
 
-	/** Called when this character's HP is depleted */
+	/** 当该角色 HP 耗尽时调用 */
 	void Die();
 
-	/** Multicast RPC to play death effects on all clients */
+	/** 在所有客户端播放死亡效果的多播 RPC */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_OnDeath();
 
-	/** Called to allow Blueprint code to react to this character's death */
+	/** 允许蓝图代码响应该角色死亡的调用 */
 	UFUNCTION(BlueprintImplementableEvent, Category="Shooter", meta = (DisplayName = "On Death"))
 	void BP_OnDeath();
 
-	/** Called from the respawn timer to destroy this character and force the PC to respawn */
+	/** 由重生计时器调用，销毁该角色并强制玩家控制器重生 */
 	void OnRespawn();
 
 public:
 
-	/** Returns true if the character is dead */
+	/** 如果角色已死亡则返回 true */
 	bool IsDead() const;
 
-	/** Returns current HP */
+	/** 返回当前 HP */
 	float GetCurrentHP() const { return CurrentHP; }
 
-	/** Returns max HP */
+	/** 返回最大 HP */
 	float GetMaxHP() const { return MaxHP; }
 
-	/** Grants kill rewards: ammo + random buffs */
+	/** 发放击杀奖励：弹药 + 随机增益 */
 	void GrantKillRewards();
 
-	/** Returns the score multiplier for scoring */
+	/** 返回用于计分的分数倍率 */
 	float GetScoreMultiplier() const { return bHasScoreBoost ? ScoreBoostMultiplier : 1.0f; }
 };

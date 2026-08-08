@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -10,7 +10,6 @@ class AShooterWeapon;
 class UAnimMontage;
 
 
-// This class does not need to be modified.
 UINTERFACE(MinimalAPI)
 class UShooterWeaponHolder : public UInterface
 {
@@ -18,7 +17,7 @@ class UShooterWeaponHolder : public UInterface
 };
 
 /**
- *  Common interface for Shooter Game weapon holder classes
+ *  Shooter 游戏武器持有者类的通用接口
  */
 class NEWPROJECT_API IShooterWeaponHolder
 {
@@ -26,39 +25,39 @@ class NEWPROJECT_API IShooterWeaponHolder
 
 public:
 
-	/** Attaches a weapon's meshes to the owner */
+	/** 将武器网格挂接到持有者 */
 	virtual void AttachWeaponMeshes(AShooterWeapon* Weapon) = 0;
 
-	/** Plays the firing montage for the weapon */
+	/** 播放武器的开火蒙太奇 */
 	virtual void PlayFiringMontage(UAnimMontage* Montage) = 0;
 
-	/** Applies weapon recoil to the owner */
+	/** 向持有者应用武器后坐力 */
 	virtual void AddWeaponRecoil(float Recoil) = 0;
 
-	/** Updates the weapon's HUD with the current ammo count */
+	/** 用当前弹药数量更新武器 HUD */
 	virtual void UpdateWeaponHUD(int32 CurrentAmmo, int32 MagazineSize) = 0;
 
-	/** Calculates and returns the aim location for the weapon */
+	/** 计算并返回武器的瞄准位置 */
 	virtual FVector GetWeaponTargetLocation() = 0;
 
-	/** Gives a weapon of this class to the owner */
+	/** 向持有者给予此类武器 */
 	virtual void AddWeaponClass(const TSubclassOf<AShooterWeapon>& WeaponClass) = 0;
 
-	/** Activates the passed weapon */
+	/** 激活传入的武器 */
 	virtual void OnWeaponActivated(AShooterWeapon* Weapon) = 0;
 
-	/** Deactivates the passed weapon */
+	/** 停用传入的武器 */
 	virtual void OnWeaponDeactivated(AShooterWeapon* Weapon) = 0;
 
-	/** Notifies the owner that the weapon cooldown has expired and it's ready to shoot again */
+	/** 通知持有者武器冷却已结束，可以再次射击 */
 	virtual void OnSemiWeaponRefire() = 0;
 
-	/** Plays the equip montage on the character's mesh */
+	/** 在角色网格上播放装备蒙太奇 */
 	virtual void PlayEquipMontage(UAnimMontage* Montage) = 0;
 
-	/** Plays the unequip montage on the character's mesh */
+	/** 在角色网格上播放卸下武器蒙太奇 */
 	virtual void PlayUnequipMontage(UAnimMontage* Montage) = 0;
 
-	/** Plays the reload montage on the character's mesh */
+	/** 在角色网格上播放换弹蒙太奇 */
 	virtual void PlayReloadMontage(UAnimMontage* Montage) = 0;
 };

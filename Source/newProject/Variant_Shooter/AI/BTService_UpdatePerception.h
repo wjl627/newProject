@@ -11,8 +11,8 @@ struct FBTUpdatePerceptionMemory
 	float LostTargetTime = 0.0f;
 	float LostAttackTime = 0.0f;
 
-	static constexpr float GracePeriod = 0.5f;
-	static constexpr float ChasePersistTime = 3.0f;
+	static constexpr float GracePeriod = 1.0f;
+	static constexpr float ChasePersistTime = 6.0f;
 };
 
 UCLASS()
@@ -35,4 +35,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Blackboard")
 	FName bHasLineOfSightKey = TEXT("bHasLineOfSight");
+
+	UPROPERTY(EditAnywhere, Category = "Blackboard")
+	FName PatrolLocationKey = TEXT("PatrolLocation");
 };

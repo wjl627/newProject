@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "Variant_Shooter/AI/EnvQueryContext_Target.h"
@@ -8,18 +8,18 @@
 
 void UEnvQueryContext_Target::ProvideContext(FEnvQueryInstance& QueryInstance, FEnvQueryContextData& ContextData) const
 {
-	// get the controller from the query instance
+	// 从查询实例中获取控制器
 	if (AShooterAIController* Controller = Cast<AShooterAIController>(QueryInstance.Owner))
 	{
-		// ensure the target is valid
+		// 确保目标有效
 		if (IsValid(Controller->GetCurrentTarget()))
 		{
-			// add the controller's target actor to the context
+			// 将控制器的目标 Actor 添加到上下文中
 			UEnvQueryItemType_Actor::SetContextHelper(ContextData, Controller->GetCurrentTarget());
 
 		} else {
 
-			// if for any reason there's no target, default to the controller
+			// 如果由于任何原因没有目标，则默认使用控制器本身
 			UEnvQueryItemType_Actor::SetContextHelper(ContextData, Controller);
 		}
 	}

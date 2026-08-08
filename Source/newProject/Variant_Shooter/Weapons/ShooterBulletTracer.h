@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -40,15 +40,15 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	float MaxLifetime = 2.0f;
 
-	/** Scale along the forward axis to make the bullet look like a streak */
+	/** 沿前向轴的缩放，让子弹看起来像一条拖尾 */
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	float StreakScale = 6.0f;
 
-	/** Half-length of the mesh along the forward axis. Compensates for pivot not at endpoint. Set to ~half your mesh length */
+	/** 网格沿前向轴的半长度，用于补偿枢轴不在端点的情况。设置为网格长度的一半左右 */
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	float MeshPivotOffset = 0.0f;
 
-	/** The axis of the mesh that points forward along the flight path */
+	/** 网格中沿飞行路径朝前的轴 */
 	UPROPERTY(EditAnywhere, Category="Tracer")
 	ETracerForwardAxis ForwardAxis = ETracerForwardAxis::ZAxis;
 
@@ -56,6 +56,6 @@ protected:
 	FVector EndLocation;
 	float Age = 0.0f;
 
-	/** Skips the first tick to avoid same-frame movement when spawned during net receive in multiplayer */
+	/** 跳过第一次 Tick，避免多人游戏中网络接收生成时同帧移动 */
 	bool bSkipFirstTick = true;
 };

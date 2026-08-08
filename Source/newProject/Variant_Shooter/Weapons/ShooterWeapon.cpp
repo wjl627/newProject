@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ShooterWeapon.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -9,7 +9,9 @@
 #include "TimerManager.h"
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Camera/CameraComponent.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -45,6 +47,22 @@ void AShooterWeapon::BeginPlay()
 	CurrentBullets = MagazineSize;
 
 	WeaponOwner->AttachWeaponMeshes(this);
+
+	// 记录静止变换，以便后坐力冲击能回到该位置
+	FirstPersonMeshRestTransform = FirstPersonMesh->GetRelativeTransform();
+	ThirdPersonMeshRestTransform = ThirdPersonMesh->GetRelativeTransform();
+	bRestTransformsCaptured = true;
+}
+
+void AShooterWeapon::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (WeaponKickAlpha > 0.0f)
+	{
+		WeaponKickAlpha = FMath::FInterpTo(WeaponKickAlpha, 0.0f, DeltaSeconds, 1.0f / FMath::Max(WeaponKickDuration, KINDA_SMALL_NUMBER));
+		ApplyWeaponKick();
+	}
 }
 
 void AShooterWeapon::EndPlay(EEndPlayReason::Type EndPlayReason)
@@ -125,7 +143,7 @@ void AShooterWeapon::Reload()
 
 	bIsReloading = true;
 
-	// Determine reload duration from montage or fallback time
+	// 根据动画或回退时间确定换弹时长
 	float Duration = ReloadTime;
 	if (ReloadMontage)
 	{
@@ -192,11 +210,112 @@ void AShooterWeapon::FireCooldownExpired()
 	WeaponOwner->OnSemiWeaponRefire();
 }
 
+FVector AShooterWeapon::GetMuzzleLocation() const
+{
+	auto TryGetSocketLocation = [this](USkeletalMeshComponent* Mesh, FVector& OutLocation) -> bool
+	{
+		if (Mesh && !MuzzleSocketName.IsNone() && Mesh->DoesSocketExist(MuzzleSocketName))
+		{
+			OutLocation = Mesh->GetSocketLocation(MuzzleSocketName);
+			return true;
+		}
+		return false;
+	};
+
+	// 选择本地观看者可见的网格
+	USkeletalMeshComponent* VisualMesh = ThirdPersonMesh;
+	const AController* OwnerController = PawnOwner ? PawnOwner->GetController() : nullptr;
+	if (OwnerController && OwnerController->IsLocalPlayerController())
+	{
+		VisualMesh = FirstPersonMesh;
+	}
+
+	FVector SocketLocation = FVector::ZeroVector;
+	if (TryGetSocketLocation(VisualMesh, SocketLocation))
+	{
+		return SocketLocation;
+	}
+
+	// 回退：尝试另一个网格
+	if (VisualMesh != FirstPersonMesh && TryGetSocketLocation(FirstPersonMesh, SocketLocation))
+	{
+		return SocketLocation;
+	}
+	if (VisualMesh != ThirdPersonMesh && TryGetSocketLocation(ThirdPersonMesh, SocketLocation))
+	{
+		return SocketLocation;
+	}
+
+	return VisualMesh ? VisualMesh->GetComponentLocation() : GetActorLocation();
+}
+
+void AShooterWeapon::TriggerWeaponKick()
+{
+	if (WeaponKickBack <= 0.0f && WeaponKickUp <= 0.0f)
+	{
+		return;
+	}
+
+	WeaponKickAlpha = 1.0f;
+	ApplyWeaponKick();
+}
+
+void AShooterWeapon::ApplyWeaponKick()
+{
+	if (!bRestTransformsCaptured)
+	{
+		return;
+	}
+
+	const auto ApplyKickToMesh = [this](USkeletalMeshComponent* Mesh, const FTransform& RestTransform)
+	{
+		if (!Mesh)
+		{
+			return;
+		}
+
+		// 第一人称视角下，相对持有者相机施加冲击，使枪在屏幕上
+		// 始终向后上方移动。第三人称视角则使用持有者自身的轴向。
+		FVector BackDir = -GetActorForwardVector();
+		FVector UpDir = FVector::UpVector;
+		if (Mesh == FirstPersonMesh && PawnOwner)
+		{
+			if (const UCameraComponent* Camera = PawnOwner->FindComponentByClass<UCameraComponent>())
+			{
+				BackDir = -Camera->GetForwardVector();
+				UpDir = Camera->GetUpVector();
+			}
+		}
+
+		const FVector WorldOffset = (BackDir * WeaponKickBack + UpDir * WeaponKickUp) * WeaponKickAlpha;
+
+		// 将世界空间的冲击转换到网格的父空间，使无论武器
+		// 如何挂接，效果看起来都一致
+		FVector LocalOffset = FVector::ZeroVector;
+		if (USceneComponent* Parent = Mesh->GetAttachParent())
+		{
+			LocalOffset = Parent->GetComponentTransform().InverseTransformVector(WorldOffset);
+		}
+
+		Mesh->SetRelativeLocation(RestTransform.GetLocation() + LocalOffset);
+	};
+
+	ApplyKickToMesh(FirstPersonMesh, FirstPersonMeshRestTransform);
+	ApplyKickToMesh(ThirdPersonMesh, ThirdPersonMeshRestTransform);
+}
+
 void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 {
-	const FVector EyeLoc = PawnOwner ? PawnOwner->GetPawnViewLocation() : FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
-	const FVector AimDir = (TargetLocation - EyeLoc).GetSafeNormal();
-	const FVector TraceEnd = EyeLoc + AimDir * FMath::Max(MaxFireRange, FVector::Dist(EyeLoc, TargetLocation) + 500.0f);
+	// 从枪口开始射击，使子弹从枪口而不是眼睛位置射出。
+	// 本地控制的第一人称玩家保留基于相机的射线，以保证
+	// 准星准确。AI Pawn（NPC）始终从枪口开火。
+	const AController* OwnerController = PawnOwner ? PawnOwner->GetController() : nullptr;
+	const FVector TraceOrigin = (OwnerController && OwnerController->IsLocalPlayerController())
+		? PawnOwner->GetPawnViewLocation()
+		: GetMuzzleLocation();
+	const FVector AimDir = (TargetLocation - TraceOrigin).GetSafeNormal();
+	const FVector TraceStart = TraceOrigin + AimDir * MuzzleOffset;
+	const FVector TraceEnd = TraceStart + AimDir * FMath::Max(MaxFireRange, FVector::Dist(TraceOrigin, TargetLocation) + 500.0f);
 
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(GetOwner());
@@ -209,7 +328,7 @@ void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 	ObjectParams.AddObjectTypesToQuery(ECC_PhysicsBody);
 
 	FHitResult HitResult;
-	const bool bHit = GetWorld()->LineTraceSingleByObjectType(HitResult, EyeLoc, TraceEnd, ObjectParams, QueryParams);
+	const bool bHit = GetWorld()->LineTraceSingleByObjectType(HitResult, TraceStart, TraceEnd, ObjectParams, QueryParams);
 	const FVector ImpactPoint = bHit ? HitResult.ImpactPoint : HitResult.TraceEnd;
 
 	if (bHit)
@@ -246,9 +365,11 @@ void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, c
 		WeaponOwner->UpdateWeaponHUD(BulletCount, MagazineSize);
 	}
 
+	TriggerWeaponKick();
+
 	if (TracerClass)
 	{
-		const FVector MuzzleLocation = FirstPersonMesh->GetSocketLocation(MuzzleSocketName);
+		const FVector MuzzleLocation = GetMuzzleLocation();
 
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -256,8 +377,11 @@ void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, c
 		if (AShooterBulletTracer* Tracer = GetWorld()->SpawnActor<AShooterBulletTracer>(TracerClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams))
 		{
 			const FVector Dir = (ImpactPoint - MuzzleLocation).GetSafeNormal();
-			const FVector TracerStart = MuzzleLocation + Dir * MuzzleOffset;
-			Tracer->Initialize(TracerStart, ImpactPoint);
+			if (!Dir.IsNearlyZero())
+			{
+				const FVector TracerStart = MuzzleLocation + Dir * MuzzleOffset;
+				Tracer->Initialize(TracerStart, ImpactPoint);
+			}
 		}
 	}
 }

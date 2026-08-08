@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "BTService_UpdatePerception.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -6,6 +6,8 @@
 #include "Perception/AISense_Sight.h"
 #include "AIController.h"
 #include "ShooterAIController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
 
 UBTService_UpdatePerception::UBTService_UpdatePerception()
 {
@@ -43,6 +45,27 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 	AActor* BestTarget = nullptr;
 	float BestDistSq = MAX_FLT;
 
+	// 始终检测任何非常靠近的物体，即使它在视线锥之外或 AI 身后。
+	// 防止敌人在近距离内无视玩家。
+	if (ShooterAI && ShooterAI->GetCloseRangeAutoDetectRadius() > 0.0f)
+	{
+		TArray<AActor*> CloseActors;
+		UGameplayStatics::GetAllActorsWithTag(OwnerPawn->GetWorld(), SenseTag, CloseActors);
+		const float CloseRangeSq = FMath::Square(ShooterAI->GetCloseRangeAutoDetectRadius());
+		for (AActor* Actor : CloseActors)
+		{
+			if (Actor && !Actor->ActorHasTag(FName("Dead")))
+			{
+				const float DistSq = FVector::DistSquared(Actor->GetActorLocation(), OwnerPawn->GetActorLocation());
+				if (DistSq <= CloseRangeSq && DistSq < BestDistSq)
+				{
+					BestDistSq = DistSq;
+					BestTarget = Actor;
+				}
+			}
+		}
+	}
+
 	for (AActor* Actor : PerceivedActors)
 	{
 		if (Actor && Actor->ActorHasTag(SenseTag) && !Actor->ActorHasTag(FName("Dead")))
@@ -56,7 +79,7 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 		}
 	}
 
-	// Sync TargetEnemy early so HasLineOfSightToTarget works below
+	// 提前同步 TargetEnemy，以便下面的 HasLineOfSightToTarget 正常工作
 	if (ShooterAI)
 	{
 		ShooterAI->SetCurrentTarget(BestTarget);
@@ -65,6 +88,10 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 	if (BestTarget)
 	{
 		Memory->LostTargetTime = 0.0f;
+
+		// 记住目标位置，以便 AI 在失去视野后仍能追击
+		ShooterAI->UpdateLastKnownTargetLocation(BestTarget->GetActorLocation());
+		Blackboard->SetValueAsVector(PatrolLocationKey, BestTarget->GetActorLocation());
 
 		const float Distance = FMath::Sqrt(BestDistSq);
 		const bool bInAttackRange = Distance <= ShooterAI->GetAttackRange();
@@ -79,7 +106,7 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 			Memory->LostAttackTime += DeltaSeconds;
 		}
 
-		// Keep chasing beyond LoseTargetRange if we were recently attacking
+		// 如果最近正在攻击，即使超出 LoseTargetRange 也继续追击
 		if (Distance > ShooterAI->GetLoseTargetRange())
 		{
 			if (Memory->LostAttackTime > FBTUpdatePerceptionMemory::ChasePersistTime)
@@ -110,6 +137,8 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 				if (ShooterAI)
 				{
 					ShooterAI->SetCurrentTarget(BestTarget);
+					ShooterAI->UpdateLastKnownTargetLocation(BestTarget->GetActorLocation());
+					Blackboard->SetValueAsVector(PatrolLocationKey, BestTarget->GetActorLocation());
 				}
 			}
 		}

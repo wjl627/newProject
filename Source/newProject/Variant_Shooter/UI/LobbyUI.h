@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -13,15 +13,15 @@ public:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
-	/** Host clicks Start Game */
+	/** 房主点击开始游戏 */
 	UFUNCTION(BlueprintCallable, Category="Lobby")
 	void StartGame();
 
-	/** Called when the player list changes */
+	/** 当玩家列表变化时调用 */
 	UFUNCTION(BlueprintImplementableEvent, Category="Lobby")
 	void OnPlayerListUpdated(const TArray<FString>& PlayerNames);
 
-	/** Called to show/hide the Start button (host only) */
+	/** 用于显示/隐藏开始按钮（仅房主） */
 	UFUNCTION(BlueprintImplementableEvent, Category="Lobby")
 	void SetHostControlsVisible(bool bVisible);
 

@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "ShooterPickup.h"
@@ -14,10 +14,10 @@ AShooterPickup::AShooterPickup()
 {
  	PrimaryActorTick.bCanEverTick = true;
 
-	// create the root
+	// 创建根组件
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 
-	// create the collision sphere
+	// 创建碰撞球体
 	SphereCollision = CreateDefaultSubobject<USphereComponent>(TEXT("Sphere Collision"));
 	SphereCollision->SetupAttachment(RootComponent);
 
@@ -28,10 +28,10 @@ AShooterPickup::AShooterPickup()
 	SphereCollision->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	SphereCollision->bFillCollisionUnderneathForNavmesh = true;
 
-	// subscribe to the collision overlap on the sphere
+	// 订阅球体上的碰撞重叠事件
 	SphereCollision->OnComponentBeginOverlap.AddDynamic(this, &AShooterPickup::OnOverlap);
 
-	// create the mesh
+	// 创建网格
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(SphereCollision);
 
@@ -44,7 +44,7 @@ void AShooterPickup::OnConstruction(const FTransform& Transform)
 
 	if (FWeaponTableRow* WeaponData = WeaponType.GetRow<FWeaponTableRow>(FString()))
 	{
-		// set the mesh
+		// 设置网格
 		Mesh->SetStaticMesh(WeaponData->StaticMesh.LoadSynchronous());
 	}
 }
@@ -55,7 +55,7 @@ void AShooterPickup::BeginPlay()
 
 	if (FWeaponTableRow* WeaponData = WeaponType.GetRow<FWeaponTableRow>(FString()))
 	{
-		// copy the weapon class
+		// 复制武器类
 		WeaponClass = WeaponData->WeaponToSpawn;
 	}
 }
@@ -64,45 +64,45 @@ void AShooterPickup::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 
-	// clear the respawn timer
+	// 清除重生计时器
 	GetWorld()->GetTimerManager().ClearTimer(RespawnTimer);
 }
 
 void AShooterPickup::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	// have we collided against a weapon holder?
+	// 是否与武器持有者发生碰撞？
 	if (IShooterWeaponHolder* WeaponHolder = Cast<IShooterWeaponHolder>(OtherActor))
 	{
 		WeaponHolder->AddWeaponClass(WeaponClass);
 
-		// hide this mesh
+		// 隐藏此网格
 		SetActorHiddenInGame(true);
 
-		// disable collision
+		// 禁用碰撞
 		SetActorEnableCollision(false);
 
-		// disable ticking
+		// 禁用 Tick
 		SetActorTickEnabled(false);
 
-		// schedule the respawn
+		// 安排重生
 		GetWorld()->GetTimerManager().SetTimer(RespawnTimer, this, &AShooterPickup::RespawnPickup, RespawnTime, false);
 	}
 }
 
 void AShooterPickup::RespawnPickup()
 {
-	// unhide this pickup
+	// 取消隐藏此拾取物
 	SetActorHiddenInGame(false);
 
-	// call the BP handler
+	// 调用蓝图处理器
 	BP_OnRespawn();
 }
 
 void AShooterPickup::FinishRespawn()
 {
-	// enable collision
+	// 启用碰撞
 	SetActorEnableCollision(true);
 
-	// enable tick
+	// 启用 Tick
 	SetActorTickEnabled(true);
 }

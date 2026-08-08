@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "ShooterBulletCounterUI.h"
@@ -46,7 +46,7 @@ void UShooterBulletCounterUI::NativeConstruct()
 		return;
 	}
 
-	// Create the canvas panel if not already present
+	// 如果画布面板尚不存在则创建
 	if (!RootCanvas)
 	{
 		RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
@@ -60,7 +60,7 @@ void UShooterBulletCounterUI::NativeConstruct()
 	{
 		CreateDamageFrame();
 
-		// Create health bar
+		// 创建生命条
 		if (!HealthBar)
 		{
 			HealthBar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), TEXT("HealthBar"));
@@ -78,7 +78,7 @@ void UShooterBulletCounterUI::NativeConstruct()
 			}
 		}
 
-		// Create ammo text
+		// 创建弹药文本
 		if (!AmmoText)
 		{
 			AmmoText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("AmmoText"));

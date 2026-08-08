@@ -1,32 +1,61 @@
-#include "MainMenuUI.h"
-#include "ShooterGameInstance.h"
-#include "ShooterPlayerController.h"
+﻿#include "MainMenuUI.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "Kismet/GameplayStatics.h"
+#include "SocketSubsystem.h"
+#include "IPAddress.h"
 
-void UMainMenuUI::NativeConstruct()
+static const TCHAR* ShooterMapPath = TEXT("/Game/Variant_Shooter/Lvl_Shooter");
+static const TCHAR* DefaultPort = TEXT(":7777");
+
+bool UMainMenuUI::IsOwnLanAddress(const FString& Host)
 {
-	Super::NativeConstruct();
-
-	if (UShooterGameInstance* GI = GetGameInstance<UShooterGameInstance>())
+	// 空地址表示“仅作为主机”。有意排除回环地址，因此输入
+	// 127.0.0.1 会作为客户端加入本机，这是同一台电脑上两个实例连接的方式。
+	if (Host.IsEmpty())
 	{
-		GI->OnSessionNamesFound.AddUObject(this, &UMainMenuUI::HandleSessionNamesFound);
-		GI->OnSessionCreated.AddUObject(this, &UMainMenuUI::HandleSessionCreated);
-		GI->OnSessionCreateFailed.AddUObject(this, &UMainMenuUI::HandleSessionCreateFailed);
+		return true;
 	}
+
+	if (Host.Equals(TEXT("localhost"), ESearchCase::IgnoreCase) || Host == TEXT("127.0.0.1"))
+	{
+		return false;
+	}
+
+	ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+	if (!Sockets)
+	{
+		return false;
+	}
+
+	TArray<TSharedPtr<FInternetAddr>> Adapters;
+	if (Sockets->GetLocalAdapterAddresses(Adapters))
+	{
+		for (const TSharedPtr<FInternetAddr>& Addr : Adapters)
+		{
+			// ToString(false) 会省略端口，留下裸地址用于比较
+			if (Addr.IsValid() && Addr->ToString(false) == Host)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
-void UMainMenuUI::NativeDestruct()
+FString UMainMenuUI::GetLocalIP() const
 {
-	if (UShooterGameInstance* GI = GetGameInstance<UShooterGameInstance>())
+	ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+	if (!Sockets)
 	{
-		GI->OnSessionNamesFound.RemoveAll(this);
-		GI->OnSessionCreated.RemoveAll(this);
-		GI->OnSessionCreateFailed.RemoveAll(this);
+		return TEXT("127.0.0.1");
 	}
 
-	Super::NativeDestruct();
+	bool bCanBindAll = false;
+	const TSharedRef<FInternetAddr> Addr = Sockets->GetLocalHostAddr(*GLog, bCanBindAll);
+	return Addr->ToString(false);
 }
 
 void UMainMenuUI::ConnectOrHost(const FString& IP)
@@ -37,20 +66,29 @@ void UMainMenuUI::ConnectOrHost(const FString& IP)
 		return;
 	}
 
-	if (IP.IsEmpty())
+	// 去掉可选的 ":port" 端口，以便用裸地址与本地网卡地址匹配
+	const FString Trimmed = IP.TrimStartAndEnd();
+	FString Host = Trimmed;
+	FString Port;
+	Trimmed.Split(TEXT(":"), &Host, &Port);
+
+	if (IsOwnLanAddress(Host))
 	{
-		// Host: reload map as listen server
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("作为主机开启服务器..."));
-		GetWorld()->ServerTravel(TEXT("Lvl_Shooter?listen"));
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("作为主机开启服务器 (%s)..."), *GetLocalIP()));
+
+		if (GetWorld()->ServerTravel(FString::Printf(TEXT("%s?listen"), ShooterMapPath)))
+		{
+			OnHostingStarted();
+		}
+		else
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("开启服务器失败"));
+			OnHostingFailed();
+		}
 		return;
 	}
 
-	// Client: connect to host
-	FString ConnectString = IP;
-	if (!ConnectString.Contains(TEXT(":")))
-	{
-		ConnectString += TEXT(":7777");
-	}
+	const FString ConnectString = Port.IsEmpty() ? Host + DefaultPort : Trimmed;
 
 	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("正在连接 %s..."), *ConnectString));
 	PC->ClientTravel(ConnectString, TRAVEL_Absolute);
@@ -62,62 +100,4 @@ void UMainMenuUI::ExitGame()
 	{
 		UKismetSystemLibrary::QuitGame(GetWorld(), PC, EQuitPreference::Quit, false);
 	}
-}
-
-void UMainMenuUI::FindGames()
-{
-	UShooterGameInstance* GI = GetGameInstance<UShooterGameInstance>();
-	if (!GI)
-	{
-		return;
-	}
-
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("正在搜索房间..."));
-	OnSearchingStarted();
-	GI->FindGames();
-}
-
-void UMainMenuUI::JoinGame(int32 Index)
-{
-	UShooterGameInstance* GI = GetGameInstance<UShooterGameInstance>();
-	if (!GI)
-	{
-		return;
-	}
-
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("正在加入房间 [%d]..."), Index));
-	GI->JoinFoundSession(Index);
-}
-
-void UMainMenuUI::HandleSessionNamesFound(const TArray<FString>& Names)
-{
-	if (Names.Num() > 0)
-	{
-		FString Msg = FString::Printf(TEXT("找到 %d 个房间"), Names.Num());
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, Msg);
-		for (int32 i = 0; i < Names.Num(); ++i)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("  [%d] %s"), i, *Names[i]));
-		}
-		OnSearchResultsReady(Names);
-	}
-	else
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("没有找到房间"));
-		OnNoSessionsFound();
-	}
-}
-
-void UMainMenuUI::HandleSessionCreated()
-{
-	if (AShooterPlayerController* PC = GetOwningPlayer<AShooterPlayerController>())
-	{
-		PC->ShowLobby();
-	}
-}
-
-void UMainMenuUI::HandleSessionCreateFailed()
-{
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("创建房间失败"));
-	OnHostingFailed();
 }

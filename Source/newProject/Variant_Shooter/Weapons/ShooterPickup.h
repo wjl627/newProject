@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -13,84 +13,84 @@ class UPrimitiveComponent;
 class AShooterWeapon;
 
 /**
- *  Holds information about a type of weapon pickup
+ *  保存一种武器拾取物的信息
  */
 USTRUCT(BlueprintType)
 struct FWeaponTableRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
-	/** Mesh to display on the pickup */
+	/** 拾取物上显示的网格 */
 	UPROPERTY(EditAnywhere)
 	TSoftObjectPtr<UStaticMesh> StaticMesh;
 
-	/** Weapon class to grant on pickup */
+	/** 拾取时给予的武器类 */
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<AShooterWeapon> WeaponToSpawn;
 };
 
 /**
- *  Simple shooter game weapon pickup
+ *  射击游戏的简单武器拾取物
  */
 UCLASS(abstract)
 class NEWPROJECT_API AShooterPickup : public AActor
 {
 	GENERATED_BODY()
 
-	/** Collision sphere */
+	/** 碰撞球体 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	USphereComponent* SphereCollision;
 
-	/** Weapon pickup mesh. Its mesh asset is set from the weapon data table */
+	/** 武器拾取物网格。其网格资源由武器数据表设置 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UStaticMeshComponent* Mesh;
 	
 protected:
 
-	/** Data on the type of picked weapon and visuals of this pickup */
+	/** 拾取武器类型及该拾取物外观的数据 */
 	UPROPERTY(EditAnywhere, Category="Pickup")
 	FDataTableRowHandle WeaponType;
 
-	/** Type to weapon to grant on pickup. Set from the weapon data table. */
+	/** 拾取时要给予的武器类型。由武器数据表设置。 */
 	TSubclassOf<AShooterWeapon> WeaponClass;
 	
-	/** Time to wait before respawning this pickup */
+	/** 重生该拾取物前的等待时间 */
 	UPROPERTY(EditAnywhere, Category="Pickup", meta = (ClampMin = 0, ClampMax = 120, Units = "s"))
 	float RespawnTime = 4.0f;
 
-	/** Timer to respawn the pickup */
+	/** 用于重生拾取物的计时器 */
 	FTimerHandle RespawnTimer;
 
 public:	
 	
-	/** Constructor */
+	/** 构造函数 */
 	AShooterPickup();
 
 protected:
 
-	/** Native construction script */
+	/** 原生构造脚本 */
 	virtual void OnConstruction(const FTransform& Transform) override;
 
-	/** Gameplay Initialization*/
+	/** 游戏逻辑初始化 */
 	virtual void BeginPlay() override;
 
-	/** Gameplay cleanup */
+	/** 游戏逻辑清理 */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	/** Handles collision overlap */
+	/** 处理碰撞重叠 */
 	UFUNCTION()
 	virtual void OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
 protected:
 
-	/** Called when it's time to respawn this pickup */
+	/** 当拾取物需要重生时调用 */
 	void RespawnPickup();
 
-	/** Passes control to Blueprint to animate the pickup respawn. Should end by calling FinishRespawn */
+	/** 将控制权交给蓝图以播放拾取物重生动画。应在结束时调用 FinishRespawn */
 	UFUNCTION(BlueprintImplementableEvent, Category="Pickup", meta = (DisplayName = "OnRespawn"))
 	void BP_OnRespawn();
 
-	/** Enables this pickup after respawning */
+	/** 重生后启用该拾取物 */
 	UFUNCTION(BlueprintCallable, Category="Pickup")
 	void FinishRespawn();
 };

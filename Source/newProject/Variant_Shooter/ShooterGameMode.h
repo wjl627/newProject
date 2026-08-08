@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -10,8 +10,8 @@
 class AShooterNPC;
 
 /**
- *  Simple GameMode for a first person shooter game
- *  Manages team and player scores, enemy spawning
+ *  第一人称射击游戏的简单 GameMode
+ *  管理队伍和玩家分数、敌人生成
  */
 UCLASS(abstract)
 class NEWPROJECT_API AShooterGameMode : public AGameModeBase
@@ -23,33 +23,33 @@ public:
 
 protected:
 
-	/** Map of scores by team ID */
+	/** 按队伍 ID 记录的分数映射 */
 	TMap<uint8, int32> TeamScores;
 
-	/** Map of individual player scores by controller */
+	/** 按控制器记录的玩家个人分数映射 */
 	TMap<AController*, int32> PlayerScores;
 
-	/** Points awarded per enemy kill */
+	/** 每击杀一个敌人获得的分数 */
 	UPROPERTY(EditAnywhere, Category="Scoring")
 	int32 KillScoreAmount = 100;
 
-	/** Desired number of enemies alive at once */
+	/** 同时存活的期望敌人数量 */
 	UPROPERTY(EditAnywhere, Category="Spawning")
 	int32 MaxEnemyCount = 5;
 
-	/** Enemy class to spawn */
+	/** 要生成的敌人类型 */
 	UPROPERTY(EditAnywhere, Category="Spawning")
 	TSubclassOf<AShooterNPC> EnemyClass;
 
-	/** Interval between spawn checks */
+	/** 生成检查的时间间隔 */
 	UPROPERTY(EditAnywhere, Category="Spawning", meta = (ClampMin = 0.5f, ClampMax = 30, Units = "s"))
 	float SpawnCheckInterval = 3.0f;
 
-	/** Match duration in seconds */
+	/** 比赛时长（秒） */
 	UPROPERTY(EditAnywhere, Category="Match", meta = (ClampMin = 60, ClampMax = 3600, Units = "s"))
 	float MatchDuration = 60.0f;
 
-	/** Remaining match time in seconds */
+	/** 剩余比赛时间（秒） */
 	float RemainingTime = 0.0f;
 
 	FTimerHandle SpawnTimer;
@@ -57,33 +57,33 @@ protected:
 
 protected:
 
-	/** Gameplay initialization */
+	/** 游戏逻辑初始化 */
 	virtual void BeginPlay() override;
 
-	/** Periodically checks enemy count and spawns if below threshold */
+	/** 定期检查敌人数量，低于阈值时生成 */
 	void CheckAndSpawnEnemies();
 
-	/** Called every second to tick the match timer */
+	/** 每秒调用一次以更新比赛计时器 */
 	void TickMatchTime();
 
-	/** Ends the match and announces the winner */
+	/** 结束比赛并宣布胜者 */
 	void EndMatch();
 
 public:
 
-	/** Starts the match (called by host from lobby) */
+	/** 开始比赛（由房主从大厅调用） */
 	UFUNCTION(BlueprintCallable, Category="Match")
 	void StartMatch();
 
-	/** Increases the score for the given team */
+	/** 增加指定队伍的分数 */
 	void IncrementTeamScore(uint8 TeamByte);
 
-	/** Awards kill score to the player who killed an enemy */
+	/** 向击杀敌人的玩家发放击杀分数 */
 	void AddKillScore(AController* Killer);
 
-	/** Halves the dead player's score */
+	/** 将死亡玩家的分数减半 */
 	void OnPlayerDeath(AController* DeadPlayer);
 
-	/** Returns the current score for a player controller */
+	/** 返回指定玩家控制器的当前分数 */
 	int32 GetPlayerScore(AController* Player) const;
 };

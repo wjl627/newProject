@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 
 #include "Variant_Shooter/ShooterPlayerController.h"
@@ -12,9 +12,7 @@
 #include "ShooterUI.h"
 #include "BuffMessageUI.h"
 #include "ShooterGameMode.h"
-#include "ShooterGameInstance.h"
 #include "Engine/Engine.h"
-#include "SocketSubsystem.h"
 #include "newProject.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
@@ -32,7 +30,7 @@ void AShooterPlayerController::BeginPlay()
 		return;
 	}
 
-	// Create game HUD widgets (hidden during menus, shown during gameplay)
+	// 创建游戏 HUD 小部件（菜单期间隐藏，游戏期间显示）
 	if (ShouldUseTouchControls())
 	{
 		MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
@@ -70,7 +68,7 @@ void AShooterPlayerController::BeginPlay()
 		BuffMessageWidget->AddToViewport(10);
 	}
 
-	// Standalone = first launch (main menu). ListenServer/Client = show lobby (match starts when host presses Enter).
+	// 单机 = 首次启动（主菜单）。监听服务器/客户端 = 显示大厅（房主按 Enter 开始比赛）。
 	if (NetMode == NM_Standalone)
 	{
 		ShowMainMenu();
@@ -85,10 +83,10 @@ void AShooterPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	// only add IMCs for local player controllers
+	// 仅为本地玩家控制器添加输入映射上下文
 	if (IsLocalPlayerController())
 	{
-		// add the input mapping contexts
+		// 添加输入映射上下文
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 		{
 			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
@@ -96,7 +94,7 @@ void AShooterPlayerController::SetupInputComponent()
 				Subsystem->AddMappingContext(CurrentContext, 0);
 			}
 
-			// only add these IMCs if we're not using mobile touch input
+			// 仅在未使用移动触摸输入时添加这些输入映射上下文
 			if (!ShouldUseTouchControls())
 			{
 				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
@@ -105,7 +103,7 @@ void AShooterPlayerController::SetupInputComponent()
 				}
 			}
 		}
-		// Bind Enter key for lobby start
+		// 绑定 Enter 键开始比赛（大厅中）
 		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AShooterPlayerController::OnLobbyStartPressed);
 	}
 }
@@ -114,22 +112,22 @@ void AShooterPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-	// subscribe to the pawn's OnDestroyed delegate
+	// 订阅 Pawn 的 OnDestroyed 委托
 	InPawn->OnDestroyed.AddDynamic(this, &AShooterPlayerController::OnPawnDestroyed);
 
-	// is this a shooter character?
+	// 这是射击角色吗？
 	if (AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(InPawn))
 	{
-		// add the player tag (server authoritative)
+		// 添加玩家标签（服务器权威）
 		ShooterCharacter->Tags.Add(PlayerPawnTag);
 
-		// OnPossess runs on the server; listen-server / standalone hosts need HUD setup here
+		// OnPossess 在服务器上运行；监听服务器/单机主机需要在这里设置 HUD
 		if (IsLocalPlayerController())
 		{
 			SetupShooterCharacterUI(ShooterCharacter);
 		}
 
-		// Re-send the current score to the client after respawn
+		// 重生后向客户端重新发送当前分数
 		if (AShooterGameMode* GM = Cast<AShooterGameMode>(GetWorld()->GetAuthGameMode()))
 		{
 			const int32 Score = GM->GetPlayerScore(this);
@@ -142,7 +140,7 @@ void AShooterPlayerController::AcknowledgePossession(APawn* P)
 {
 	Super::AcknowledgePossession(P);
 
-	// Dedicated clients receive their pawn here, not in OnPossess on the local PC
+	// 专用客户端在这里接收其 Pawn，而不是在本地玩家控制器的 OnPossess 中
 	if (AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(P))
 	{
 		SetupShooterCharacterUI(ShooterCharacter);
@@ -156,7 +154,7 @@ void AShooterPlayerController::SetupShooterCharacterUI(AShooterCharacter* Shoote
 		return;
 	}
 
-	// avoid duplicate bindings if both OnPossess and AcknowledgePossession run
+	// 如果 OnPossess 和 AcknowledgePossession 都运行，避免重复绑定
 	ShooterCharacter->OnBulletCountUpdated.RemoveDynamic(this, &AShooterPlayerController::OnBulletCountUpdated);
 	ShooterCharacter->OnDamaged.RemoveDynamic(this, &AShooterPlayerController::OnPawnDamaged);
 
@@ -188,7 +186,7 @@ void AShooterPlayerController::OnPawnDestroyed(AActor* DestroyedActor)
 		return;
 	}
 
-	// Gather alive player positions to avoid spawning on top of them
+	// 收集存活玩家的位置，避免生成在他们身上
 	TArray<FVector> AlivePositions;
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
@@ -201,7 +199,7 @@ void AShooterPlayerController::OnPawnDestroyed(AActor* DestroyedActor)
 		}
 	}
 
-	// Pick the PlayerStart farthest from any alive player
+	// 选择离所有存活玩家最远的 PlayerStart
 	AActor* BestStart = PlayerStarts[0];
 	float BestMinDist = -1.0f;
 	for (AActor* Start : PlayerStarts)
@@ -243,7 +241,7 @@ void AShooterPlayerController::OnPawnDamaged(float LifePercent)
 
 bool AShooterPlayerController::ShouldUseTouchControls() const
 {
-	// are we on a mobile platform? Should we force touch?
+	// 我们是否在移动平台上？是否需要强制触控？
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
 
@@ -302,7 +300,7 @@ void AShooterPlayerController::OnMatchStateChanged(EMatchState NewState)
 
 	case EMatchState::InProgress:
 		bMatchStarted = true;
-		// Remove menu / lobby widgets
+		// 移除菜单 / 大厅小部件
 		if (MainMenuWidget)
 		{
 			MainMenuWidget->RemoveFromParent();
