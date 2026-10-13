@@ -13,7 +13,7 @@
 ## 功能特性
 
 **战斗**
-- 三把武器（步枪 / 手枪 / 榴弹发射器），即时命中（Hitscan）+ 弹道拖尾
+- 两把武器（步枪 / 手枪 ），即时命中（Hitscan）+ 弹道拖尾
 - 全自动 / 半自动射速控制，换弹、切枪（带卸下/装备动画）、武器拾取
 - 双后坐力：相机后坐力（俯仰/偏航冲击 + 平滑回位）+ 武器网格 kick
 - 命中施加物理冲量，受击/死亡布娃娃
@@ -178,10 +178,4 @@ Source/newProject/Variant_Shooter/
 
 ---
 
-## 待改进
 
-- [ ] 分数从 GameMode 的 `TMap` 迁移到 `PlayerState`（解决晚加入玩家拿不到分数、`AController*` 指针失效问题）
-- [ ] 分数/时间同步改为 GameState 复制属性 + `OnRep_`（当前用 Client RPC）
-- [ ] 即时命中加滞后补偿（Lag Compensation）
-- [ ] 武器数值数据驱动（DataAsset / DataTable 替代硬编码 `UPROPERTY`，拾取物已用数据表可作参考）
-- [ ] 清理残留死代码：`ShooterProjectile`（抛射体，未使用）、`ShooterAIController` 中被 `#if 0` 包起的旧状态机、`ShooterStateTreeUtility`
