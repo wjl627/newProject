@@ -6,3 +6,5 @@ Saved/
 .vscode/
 *.sln
 *.sln.ide
+*.pdf
+build_err.txt
