@@ -14,6 +14,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
+#include "Net/UnrealNetwork.h"
 
 AShooterWeapon::AShooterWeapon()
 {
@@ -33,6 +34,20 @@ AShooterWeapon::AShooterWeapon()
 	ThirdPersonMesh->SetCollisionProfileName(FName("NoCollision"));
 	ThirdPersonMesh->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::WorldSpaceRepresentation);
 	ThirdPersonMesh->bOwnerNoSee = true;
+}
+
+void AShooterWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AShooterWeapon, CurrentBullets);
+}
+
+void AShooterWeapon::OnRep_CurrentBullets()
+{
+	if (WeaponOwner)
+	{
+		WeaponOwner->UpdateWeaponHUD(CurrentBullets, MagazineSize);
+	}
 }
 
 void AShooterWeapon::BeginPlay()
@@ -143,16 +158,8 @@ void AShooterWeapon::Reload()
 
 	bIsReloading = true;
 
-	// 根据动画或回退时间确定换弹时长
-	float Duration = ReloadTime;
-	if (ReloadMontage)
-	{
-		Duration = ReloadMontage->GetPlayLength();
-	}
-	else if (WeaponOwner && WeaponOwner->GetWeaponTargetLocation().IsZero())
-	{
-		Duration = ReloadTime;
-	}
+	// 使用换弹动画时长；没有动画时使用默认换弹时长。
+	const float Duration = ReloadMontage ? ReloadMontage->GetPlayLength() : ReloadTime;
 
 	Multicast_OnReloadEffects();
 	GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this, &AShooterWeapon::FinishReload, Duration, false);
@@ -346,7 +353,12 @@ void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 
 	--CurrentBullets;
 
-	Multicast_OnFireEffects(CurrentBullets, ImpactPoint);
+	if (WeaponOwner)
+	{
+		WeaponOwner->UpdateWeaponHUD(CurrentBullets, MagazineSize);
+	}
+
+	Multicast_OnFireEffects(ImpactPoint);
 
 	if (CurrentBullets <= 0)
 	{
@@ -354,18 +366,18 @@ void AShooterWeapon::FireProjectile(const FVector& TargetLocation)
 	}
 }
 
-void AShooterWeapon::Multicast_OnFireEffects_Implementation(int32 BulletCount, const FVector& ImpactPoint)
+void AShooterWeapon::Multicast_OnFireEffects_Implementation(const FVector& ImpactPoint)
 {
-	CurrentBullets = BulletCount;
-
 	if (WeaponOwner)
 	{
 		WeaponOwner->PlayFiringMontage(FiringMontage);
 		WeaponOwner->AddWeaponRecoil(FiringRecoil);
-		WeaponOwner->UpdateWeaponHUD(BulletCount, MagazineSize);
 	}
 
-	TriggerWeaponKick();
+	if (PawnOwner && PawnOwner->IsLocallyControlled())
+	{
+		TriggerWeaponKick();
+	}
 
 	if (TracerClass)
 	{

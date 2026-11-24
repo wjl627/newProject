@@ -16,8 +16,10 @@ UBTService_UpdatePerception::UBTService_UpdatePerception()
 	RandomDeviation = 0.05f;
 }
 
+
 void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
+	int32 LOSCheckCount = 0;
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
 
 	FBTUpdatePerceptionMemory* Memory = reinterpret_cast<FBTUpdatePerceptionMemory*>(NodeMemory);
@@ -85,6 +87,9 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 		ShooterAI->SetCurrentTarget(BestTarget);
 	}
 
+	bool bHasLOS = false;
+	bool bHasLOSChecked = false;
+
 	if (BestTarget)
 	{
 		Memory->LostTargetTime = 0.0f;
@@ -95,7 +100,10 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 
 		const float Distance = FMath::Sqrt(BestDistSq);
 		const bool bInAttackRange = Distance <= ShooterAI->GetAttackRange();
-		const bool bHasLOS = ShooterAI && ShooterAI->HasLineOfSightToTarget();
+
+		++LOSCheckCount;
+		bHasLOS = ShooterAI && ShooterAI->HasLineOfSightToTarget();
+		bHasLOSChecked = true;
 
 		if (bInAttackRange && bHasLOS)
 		{
@@ -148,7 +156,13 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 	{
 		const float Distance = FMath::Sqrt(BestDistSq);
 		Blackboard->SetValueAsBool(bInAttackRangeKey, Distance <= ShooterAI->GetAttackRange());
-		Blackboard->SetValueAsBool(bHasLineOfSightKey, ShooterAI && ShooterAI->HasLineOfSightToTarget());
+		if (!bHasLOSChecked)
+		{
+			++LOSCheckCount;
+			bHasLOS = ShooterAI && ShooterAI->HasLineOfSightToTarget();
+		}
+
+		Blackboard->SetValueAsBool(bHasLineOfSightKey, bHasLOS);
 	}
 	else
 	{
@@ -157,4 +171,14 @@ void UBTService_UpdatePerception::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 	}
 
 	Blackboard->SetValueAsObject(TargetActorKey, BestTarget);
+
+	if (LOSCheckCount > 0)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[AI Performance] LOS checks in one TickNode: %d"),
+			LOSCheckCount
+		);
+	}
 }

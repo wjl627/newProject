@@ -47,15 +47,15 @@ protected:
 
 	/** 运行时应用到感知组件的视觉半径（覆盖蓝图配置） */
 	UPROPERTY(EditAnywhere, Category="Shooter|Perception", meta = (ClampMin = 0, Units = "cm"))
-	float PerceptionSightRadius = 2500.0f;
+	float PerceptionSightRadius = 1200.0f;
 
 	/** 目标离开视线后仍被记住的半径范围 */
 	UPROPERTY(EditAnywhere, Category="Shooter|Perception", meta = (ClampMin = 0, Units = "cm"))
-	float PerceptionLoseSightRadius = 3200.0f;
+	float PerceptionLoseSightRadius = 1500.0f;
 
 	/** 视觉感知的外围视野角度（度） */
 	UPROPERTY(EditAnywhere, Category="Shooter|Perception", meta = (ClampMin = 1, ClampMax = 180, Units = "deg"))
-	float PerceptionSightAngle = 110.0f;
+	float PerceptionSightAngle = 80.0f;
 
 	/** 目标离开视线后仍被记住的时长 */
 	UPROPERTY(EditAnywhere, Category="Shooter|Perception", meta = (ClampMin = 0.1f, ClampMax = 30, Units = "s"))
@@ -63,7 +63,7 @@ protected:
 
 	/** 此半径内的目标无论是否在视线锥内都会被检测到（防止“太近而无法攻击”） */
 	UPROPERTY(EditAnywhere, Category="Shooter|Perception", meta = (ClampMin = 0, Units = "cm"))
-	float CloseRangeAutoDetectRadius = 500.0f;
+	float CloseRangeAutoDetectRadius = 250.0f;
 
 	// --- 巡逻 ---
 
@@ -81,7 +81,7 @@ protected:
 	// --- 战斗 ---
 
 	UPROPERTY(EditAnywhere, Category="Shooter|Combat", meta = (ClampMin = 0, Units = "cm"))
-	float AttackRange = 2000.0f;
+	float AttackRange = 600.0f;
 
 	UPROPERTY(EditAnywhere, Category="Shooter|Combat", meta = (ClampMin = 0, Units = "cm"))
 	float LoseTargetRange = 4000.0f;

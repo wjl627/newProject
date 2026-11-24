@@ -36,7 +36,12 @@ void AShooterGameMode::StartMatch()
 		return;
 	}
 
+	// 测试时减少场上敌人数，并拉长生成检查间隔，给玩家更多观察时间。
+	MaxEnemyCount = 3;
+	SpawnCheckInterval = 10.0f;
+
 	GS->SetMatchState(EMatchState::InProgress);
+	CheckAndSpawnEnemies();
 
 	// 启动周期性敌人生成检查
 	GetWorld()->GetTimerManager().SetTimer(

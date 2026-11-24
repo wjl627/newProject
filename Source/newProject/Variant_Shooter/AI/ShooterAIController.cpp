@@ -29,14 +29,14 @@ void AShooterAIController::OnPossess(APawn* InPawn)
 		PossessedNPC->bUseControllerRotationYaw = true;
 		PossessedNPC->Tags.Add(TeamTag);
 		PossessedNPC->OnPawnDeath.AddDynamic(this, &AShooterAIController::OnPawnDeath);
+		AttackRange = FMath::Min(AttackRange, 600.0f);
 
-		// 应用运行时视觉配置，让敌人能够看得很远以发动攻击，
-		// 并且不会跟丢靠近/侧面的目标。
+		// 应用运行时视觉配置，较短的视野让敌人更容易失去目标并回到巡逻。
 		if (UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent())
 		{
 			if (UAISenseConfig_Sight* SightConfig = PerceptionComp->GetSenseConfig<UAISenseConfig_Sight>())
 			{
-				SightConfig->SightRadius = FMath::Max(PerceptionSightRadius, AttackRange);
+				SightConfig->SightRadius = PerceptionSightRadius;
 				SightConfig->LoseSightRadius = FMath::Max(PerceptionLoseSightRadius, PerceptionSightRadius);
 				SightConfig->PeripheralVisionAngleDegrees = PerceptionSightAngle;
 				SightConfig->SetMaxAge(PerceptionMaxAge);

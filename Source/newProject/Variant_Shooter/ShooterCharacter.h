@@ -97,6 +97,9 @@ protected:
 	/** 全自动射击期间持续向服务器发送瞄准更新的计时器 */
 	FTimerHandle AimUpdateTimer;
 
+	/** 累计瞄准更新的经过时间，用于限制 RPC 频率 */
+	float AimTargetUpdateAccumulator = 0.0f;
+
 	// ---- 后坐力 ----
 
 	/** 开火后相机回到原始瞄准位置的速度 */
@@ -105,7 +108,7 @@ protected:
 
 	/** 开火时相机累计的最大俯仰冲击 */
 	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.1f, ClampMax = 45.0f, Units = "deg"))
-	float MaxRecoilPitch = 3.0f;
+	float MaxRecoilPitch = 15.0f;
 
 	/** 开火时相机累计的最大偏航冲击 */
 	UPROPERTY(EditAnywhere, Category="Recoil", meta = (ClampMin = 0.1f, ClampMax = 45.0f, Units = "deg"))
@@ -134,6 +137,11 @@ protected:
 	/** 当前等待恢复的相机后坐力偏移 */
 	float CurrentRecoilPitch = 0.0f;
 	float CurrentRecoilYaw = 0.0f;
+
+	/** 独立于瞄准控制的轻微开火镜头抖动状态 */
+	FRotator CameraShakeOffset = FRotator::ZeroRotator;
+	FRotator CameraShakeVelocity = FRotator::ZeroRotator;
+	FRotator PreviousCameraShakeAppliedOffset = FRotator::ZeroRotator;
 
 	/** 让相机平滑回到射击前瞄准位置的计时器 */
 	FTimerHandle RecoilRecoveryTimer;
@@ -227,6 +235,9 @@ protected:
 
 	/** 游戏逻辑初始化 */
 	virtual void BeginPlay() override;
+
+	/** 更新仅本地可见的开火镜头微震 */
+	virtual void Tick(float DeltaSeconds) override;
 
 	/** 游戏逻辑清理 */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;

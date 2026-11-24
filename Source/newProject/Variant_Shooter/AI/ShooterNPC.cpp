@@ -23,6 +23,15 @@ void AShooterNPC::BeginPlay()
 		return;
 	}
 
+	// NPC 的蓝图可能保存了手枪配置；生成时统一使用步枪以匹配 Rifle 手部姿势。
+	static UClass* RifleWeaponClass = LoadClass<AShooterWeapon>(
+		nullptr,
+		TEXT("/Game/Variant_Shooter/Blueprints/Pickups/Weapons/BP_ShooterWeapon_Rifle.BP_ShooterWeapon_Rifle_C"));
+	if (RifleWeaponClass)
+	{
+		WeaponClass = RifleWeaponClass;
+	}
+
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.Owner = this;
 	SpawnParams.Instigator = this;
@@ -34,6 +43,7 @@ void AShooterNPC::BeginPlay()
 	if (Weapon)
 	{
 		Weapon->AddReserveMagazines(Weapon->GetMaxReserveMagazines());
+		Weapon->SetDamageMultiplier(0.2f);
 	}
 }
 

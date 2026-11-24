@@ -12,7 +12,7 @@ struct FBTUpdatePerceptionMemory
 	float LostAttackTime = 0.0f;
 
 	static constexpr float GracePeriod = 1.0f;
-	static constexpr float ChasePersistTime = 6.0f;
+	static constexpr float ChasePersistTime = 2.0f;
 };
 
 UCLASS()

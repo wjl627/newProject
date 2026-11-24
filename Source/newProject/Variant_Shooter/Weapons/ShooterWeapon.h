@@ -54,6 +54,7 @@ protected:
 	int32 MaxReserveMagazines = 5;
 
 	/** 当前弹匣中的子弹数量 */
+	UPROPERTY(ReplicatedUsing=OnRep_CurrentBullets)
 	int32 CurrentBullets = 0;
 
 	/** 剩余备用弹匣数量 */
@@ -312,10 +313,16 @@ public:
 	void PlayUnequipMontage();
 
 	/** 向所有客户端多播开火效果 */
-	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_OnFireEffects(int32 BulletCount, const FVector& ImpactPoint);
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_OnFireEffects(const FVector& ImpactPoint);
+
+	/** 客户端收到弹药数更新时刷新 HUD */
+	UFUNCTION()
+	void OnRep_CurrentBullets();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** 向所有客户端多播换弹效果 */
-	UFUNCTION(NetMulticast, Reliable)
+	UFUNCTION(NetMulticast, Unreliable)
 	void Multicast_OnReloadEffects();
 };

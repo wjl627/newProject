@@ -76,6 +76,45 @@ void AShooterCharacter::BeginPlay()
 	}
 }
 
+void AShooterCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
+
+	UCameraComponent* Camera = GetFirstPersonCameraComponent();
+	if (!Camera)
+	{
+		return;
+	}
+
+	constexpr float SpringStrength = 220.0f;
+	constexpr float Damping = 24.0f;
+	CameraShakeVelocity.Pitch += (-SpringStrength * CameraShakeOffset.Pitch - Damping * CameraShakeVelocity.Pitch) * DeltaSeconds;
+	CameraShakeVelocity.Yaw += (-SpringStrength * CameraShakeOffset.Yaw - Damping * CameraShakeVelocity.Yaw) * DeltaSeconds;
+	CameraShakeVelocity.Roll += (-SpringStrength * CameraShakeOffset.Roll - Damping * CameraShakeVelocity.Roll) * DeltaSeconds;
+
+	CameraShakeOffset.Pitch = FMath::Clamp(CameraShakeOffset.Pitch + CameraShakeVelocity.Pitch * DeltaSeconds, -0.35f, 0.35f);
+	CameraShakeOffset.Yaw = FMath::Clamp(CameraShakeOffset.Yaw + CameraShakeVelocity.Yaw * DeltaSeconds, -0.25f, 0.25f);
+	CameraShakeOffset.Roll = FMath::Clamp(CameraShakeOffset.Roll + CameraShakeVelocity.Roll * DeltaSeconds, -0.35f, 0.35f);
+
+	FRotator ContinuousFireShake = FRotator::ZeroRotator;
+	if (CurrentWeapon && CurrentWeapon->IsFullAuto() && CurrentWeapon->IsFiring() && !CurrentWeapon->IsReloading())
+	{
+		const float Time = GetWorld()->GetTimeSeconds();
+		ContinuousFireShake.Pitch = FMath::Sin(Time * 2.0f * PI * 17.0f) * 0.12f;
+		ContinuousFireShake.Yaw = FMath::Sin(Time * 2.0f * PI * 13.0f) * 0.08f;
+		ContinuousFireShake.Roll = FMath::Sin(Time * 2.0f * PI * 19.0f) * 0.16f;
+	}
+
+	const FRotator AppliedOffset = CameraShakeOffset + ContinuousFireShake;
+	Camera->AddRelativeRotation(AppliedOffset - PreviousCameraShakeAppliedOffset);
+	PreviousCameraShakeAppliedOffset = AppliedOffset;
+}
+
 void AShooterCharacter::EndPlay(EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
@@ -194,6 +233,7 @@ void AShooterCharacter::DoStartFiring()
 			// 全自动射击期间持续向服务器发送瞄准更新
 			if (CurrentWeapon->IsFullAuto())
 			{
+				AimTargetUpdateAccumulator = 0.0f;
 				GetWorld()->GetTimerManager().SetTimer(
 					AimUpdateTimer,
 					this,
@@ -211,6 +251,7 @@ void AShooterCharacter::DoStopFiring()
 	if (!HasAuthority())
 	{
 		GetWorld()->GetTimerManager().ClearTimer(AimUpdateTimer);
+		AimTargetUpdateAccumulator = 0.0f;
 	}
 
 	if (CurrentWeapon && !IsDead())
@@ -252,8 +293,16 @@ void AShooterCharacter::Server_UpdateAimTarget_Implementation(FVector ClientAimT
 
 void AShooterCharacter::StreamAimTarget()
 {
-	if (CurrentWeapon)
+	if (!CurrentWeapon || !GetWorld())
 	{
+		return;
+	}
+
+	AimTargetUpdateAccumulator += GetWorld()->GetTimerManager().GetTimerRate(AimUpdateTimer);
+	constexpr float AimTargetUpdateInterval = 0.1f;
+	if (AimTargetUpdateAccumulator >= AimTargetUpdateInterval)
+	{
+		AimTargetUpdateAccumulator -= AimTargetUpdateInterval;
 		Server_UpdateAimTarget(GetWeaponTargetLocation());
 	}
 }
@@ -340,7 +389,7 @@ void AShooterCharacter::SwitchWeapon_Internal()
 
 void AShooterCharacter::PerformWeaponSwap()
 {
-	if (IsDead())
+	if (IsDead() || !OwnedWeapons.IsValidIndex(PendingWeaponIndex) || !IsValid(OwnedWeapons[PendingWeaponIndex]))
 	{
 		GetWorld()->GetTimerManager().ClearTimer(WeaponSwitchTimerHandle);
 		bIsSwitchingWeapon = false;
@@ -354,7 +403,8 @@ void AShooterCharacter::PerformWeaponSwap()
 	}
 
 	// 激活新武器（切换 ABP，但在装备动画播放前隐藏网格）
-	CurrentWeapon = OwnedWeapons[PendingWeaponIndex];
+	AShooterWeapon* NextWeapon = OwnedWeapons[PendingWeaponIndex];
+	CurrentWeapon = NextWeapon;
 	CurrentWeapon->ActivateWeapon();
 
 	// 如果新武器有装备动画，先隐藏一帧
@@ -363,25 +413,33 @@ void AShooterCharacter::PerformWeaponSwap()
 	{
 		CurrentWeapon->SetActorHiddenInGame(true);
 
+		const TWeakObjectPtr<AShooterCharacter> WeakCharacter(this);
+		const TWeakObjectPtr<AShooterWeapon> WeakWeapon(CurrentWeapon);
 		FTimerHandle EquipTimer;
 		GetWorld()->GetTimerManager().SetTimer(
 			EquipTimer,
-			[this]()
+			[WeakCharacter, WeakWeapon]()
 			{
-				if (CurrentWeapon)
+				AShooterCharacter* Character = WeakCharacter.Get();
+				AShooterWeapon* Weapon = WeakWeapon.Get();
+				if (IsValid(Character) && IsValid(Weapon) && Character->CurrentWeapon == Weapon)
 				{
-					CurrentWeapon->SetActorHiddenInGame(false);
-					Multicast_PlayEquipMontage(CurrentWeapon->GetEquipMontage());
+					Weapon->SetActorHiddenInGame(false);
+					Character->Multicast_PlayEquipMontage(Weapon->GetEquipMontage());
 
-					const float EquipDuration = CurrentWeapon->GetEquipMontage()->GetPlayLength();
+					const float EquipDuration = Weapon->GetEquipMontage()->GetPlayLength();
 
-					GetWorld()->GetTimerManager().SetTimer(
-						WeaponSwitchTimerHandle,
-						this,
+					Character->GetWorld()->GetTimerManager().SetTimer(
+						Character->WeaponSwitchTimerHandle,
+						Character,
 						&AShooterCharacter::FinishWeaponSwitch,
 						EquipDuration,
 						false
 					);
+				}
+				else if (IsValid(Character))
+				{
+					Character->FinishWeaponSwitch();
 				}
 			},
 			0.02f,
@@ -471,20 +529,31 @@ void AShooterCharacter::AddWeaponRecoil(float Recoil)
 		return;
 	}
 
-	// 给相机施加带随机性的向上冲击，并附加较小的随机水平冲击
+	// 给相机施加带随机性的向上冲击，并附加较小的随机水平冲击。
 	const float PitchKick = FMath::Min(FMath::FRandRange(KickAmount * 0.8f, KickAmount * 1.2f), MaxRecoilPitchPerShot);
 	const float YawKick = FMath::FRandRange(-1.0f, 1.0f) * PitchKick * RecoilYawRatio;
+	const float PreviousRecoilPitch = CurrentRecoilPitch;
+	const float MaxAccumulatedPitch = FMath::Max(MaxRecoilPitch, 15.0f);
+	CurrentRecoilPitch = FMath::Min(CurrentRecoilPitch + PitchKick, MaxAccumulatedPitch);
+	const float AppliedPitchKick = CurrentRecoilPitch - PreviousRecoilPitch;
+
+	// 视觉微震附加在相机组件上，不修改控制旋转，因此压枪时准星/子弹方向不受影响。
+	if (IsLocallyControlled())
+	{
+		CameraShakeVelocity.Pitch += 7.0f;
+		CameraShakeVelocity.Yaw += FMath::FRandRange(-3.0f, 3.0f);
+		CameraShakeVelocity.Roll += FMath::FRandRange(-5.0f, 5.0f);
+	}
 
 	// 直接将冲击应用到控制旋转上，使方向始终垂直向上，不受输入缩放或反转设置影响。
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		FRotator ControlRotation = PC->GetControlRotation();
-		ControlRotation.Pitch += PitchKick;
+		ControlRotation.Pitch += AppliedPitchKick;
 		ControlRotation.Yaw += YawKick;
 		PC->SetControlRotation(ControlRotation);
 	}
 
-	CurrentRecoilPitch = FMath::Min(CurrentRecoilPitch + PitchKick, MaxRecoilPitch);
 	CurrentRecoilYaw = FMath::Clamp(CurrentRecoilYaw + YawKick, -MaxRecoilYaw, MaxRecoilYaw);
 
 	// 开火期间不恢复：重置稳定计时器，使相机仅在停止射击后才开始回位
@@ -507,19 +576,25 @@ void AShooterCharacter::StartRecoilRecovery()
 
 void AShooterCharacter::UpdateRecoilRecovery()
 {
+	// 扳机仍按住时保留累计后坐力，只在松开后开始回位。
+	if (CurrentWeapon && CurrentWeapon->IsFiring())
+	{
+		return;
+	}
+
 	const float DeltaTime = 1.0f / 60.0f;
 	const float Step = RecoilRecoverySpeed * DeltaTime;
 
-	// 俯仰：向零回位
+	// 俯仰：按当前偏移的方向向零回位
 	if (FMath::Abs(CurrentRecoilPitch) > Step)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
 			FRotator ControlRotation = PC->GetControlRotation();
-			ControlRotation.Pitch -= Step;
+			ControlRotation.Pitch -= FMath::Sign(CurrentRecoilPitch) * Step;
 			PC->SetControlRotation(ControlRotation);
 		}
-		CurrentRecoilPitch -= Step;
+		CurrentRecoilPitch -= FMath::Sign(CurrentRecoilPitch) * Step;
 	}
 	else
 	{
